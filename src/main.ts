@@ -1,0 +1,79 @@
+import 'module-alias/register';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { LoggerService } from './shared/logger/logger.service';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  const configService = app.get(ConfigService);
+  const logger = app.get(LoggerService);
+
+  app.useLogger(logger);
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.setGlobalPrefix(configService.get<string>('app.apiPrefix') || 'api/v1');
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
+  // Swagger setup
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle(configService.get<string>('swagger.title') || 'NestJS Backend Starter API')
+    .setDescription(configService.get<string>('swagger.description') || 'A comprehensive NestJS backend starter template API')
+    .setVersion(configService.get<string>('swagger.version') || '1.0')
+    .addBearerAuth({
+      type: 'http',
+      name: 'Authorization',
+      description: 'Enter your Bearer token',
+      scheme: 'bearer',
+      bearerFormat: 'Bearer',
+      in: 'header',
+    },
+      'access-token'
+    )
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig, {
+  });
+  SwaggerModule.setup('docs', app, document,{
+    
+     swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      docExpansion: 'none',
+      operationsSorter: (a: any, b: any) => {
+        const methodsOrder = [
+          'post',
+          'get',
+          'put',
+          'patch',
+          'delete',
+          'options',
+          'trace',
+        ];
+        let result =
+          methodsOrder.indexOf(a.get('method')) -
+          methodsOrder.indexOf(b.get('method'));
+        if (result === 0) {
+          result = a.get('path').localeCompare(b.get('path'));
+        }
+        return result;
+      },
+      tagsSorter: 'alpha',
+    }
+  });
+
+  const port = configService.get<number>('app.port') || 3000;
+  await app.listen(port, () => {
+    logger.log(`Server started on http://localhost:${port}`, 'Bootstrap');
+  });
+}
+
+bootstrap();

@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -11,6 +11,9 @@ COPY package.json pnpm-lock.yaml ./
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
+# Approve builds
+RUN pnpm approve-builds
+
 # Copy source code
 COPY . .
 
@@ -18,7 +21,7 @@ COPY . .
 RUN pnpm build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -30,6 +33,9 @@ COPY package.json pnpm-lock.yaml ./
 
 # Install only production dependencies
 RUN pnpm install --frozen-lockfile --prod
+
+# Approve builds (your custom step)
+RUN pnpm approve-builds
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
@@ -50,4 +56,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node dist/scripts/health-check.js
 
 # Start the application
-CMD ["node", "dist/main"]
+CMD ["pnpm", "start:prod"]

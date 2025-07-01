@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ResponseDto<T> {
   @ApiProperty()
@@ -10,8 +10,8 @@ export class ResponseDto<T> {
   @ApiProperty()
   data?: T;
 
-  @ApiProperty()
-  timestamp: string;
+  @ApiPropertyOptional()
+  timestamp?: string;
 
   constructor(success: boolean, message: string, data?: T) {
     this.success = success;

@@ -79,6 +79,13 @@ export class User extends BaseEntity {
   emailVerifiedAt?: Date;
 
   @ApiPropertyOptional({
+    description: 'User email verification status',
+    example: true,
+  })
+  @Column({ default: false })
+  isEmailVerified: boolean;
+
+  @ApiPropertyOptional({
     description: 'Last login timestamp',
     example: '2023-01-01T00:00:00.000Z',
   })

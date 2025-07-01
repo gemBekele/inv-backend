@@ -1,18 +1,77 @@
-import { Controller, Post, Body, Request, UseGuards } from '@nestjs/common';
+import { 
+  Controller, 
+  Post, 
+  Body, 
+  UseGuards, 
+  HttpCode, 
+  HttpStatus 
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto, AdminCreateUserDto } from './dto/register.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { JwtAuthGuard, RolesGuard } from '../../common/guards';
+import { CurrentUser, Public, Roles } from '../../common/decorators';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '@/common/enums';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @UseGuards(LocalAuthGuard)
+  @Public()
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'User login' })
-  async login(@Body() loginDto: LoginDto, @Request() req: any) {
-	return this.authService.login(loginDto);
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @Post('register')
+  @ApiOperation({ summary: 'User registration' })
+  @ApiResponse({ status: 201, description: 'User registered successfully' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  async register(@Body() registerDto: RegisterDto) {
+    const user = await this.authService.register(registerDto);
+    const { password, ...userWithoutPassword } = user;
+    return { 
+      message: 'User registered successfully',
+      user: userWithoutPassword 
+    };
+  }
+
+  @Post('admin/create-user')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Admin create user' })
+  @ApiResponse({ status: 201, description: 'User created successfully by admin' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  async adminCreateUser(
+    @Body() adminCreateUserDto: AdminCreateUserDto,
+    @CurrentUser() adminUser: User,
+  ) {
+    if (!adminUser || ![UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(adminUser.role)) {
+      throw new Error('Forbidden - Admin access required');
+    }
+    const user = await this.authService.adminCreateUser(adminCreateUserDto, adminUser);
+    const { password, ...userWithoutPassword } = user;
+    return { 
+      message: 'User created successfully',
+      user: userWithoutPassword 
+    };
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshToken(refreshToken);
   }
 }

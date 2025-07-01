@@ -63,7 +63,7 @@ npm run start:dev
 Generate a migration after changing entities:
 
 ```bash
-pnpm migration:generate
+pnpm migration:generate --name MigrationName
 ```
 
 Run migrations:

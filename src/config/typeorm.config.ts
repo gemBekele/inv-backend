@@ -16,7 +16,7 @@ export default new DataSource({
     'src/modules/**/entities/*.entity{.ts,.js}',
   ],
   migrations: ['src/database/migrations/*{.ts,.js}'],
-  synchronize: false, // Always false for production safety
+  synchronize: process.env.NODE_ENV === 'development',
   logging: process.env.NODE_ENV === 'development',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });

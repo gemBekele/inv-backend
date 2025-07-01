@@ -4,6 +4,6 @@ export interface PaginatedResult<T> {
   page: number;
   limit: number;
   totalPages: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
+  hasNextPage?: boolean;
+  hasPrevPage?: boolean;
 }

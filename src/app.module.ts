@@ -2,13 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
-import { CacheModule } from './shared/cache/cache.module';
+import { RedisCacheModule } from './shared/cache/cache.module';
 import { LoggerModule } from './shared/logger/logger.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import * as config from './config';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { ProductsModule } from './modules/products/products.module';
+import { CacheModule } from '@nestjs/cache-manager';
+import { WarehouseModule } from './modules/warehouse/warehouse.module';
 
 @Module({
   imports: [
@@ -23,11 +26,16 @@ import { UsersModule } from './modules/users/users.module';
         config.swaggerConfig,
       ],
     }),
+    CacheModule.register({
+      isGlobal: true,
+    }),
     DatabaseModule,
-    CacheModule,
+    RedisCacheModule,
     LoggerModule,
     AuthModule,
     UsersModule,
+    ProductsModule,
+    WarehouseModule,
   ],
   providers: [
     {

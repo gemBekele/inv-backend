@@ -1,7 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { CACHE_TTL } from '../../common/constants';
 
 @Injectable()
 export class CacheService {
@@ -11,50 +10,28 @@ export class CacheService {
     return this.cacheManager.get<T>(key);
   }
 
-  async set<T>(key: string, value: T, ttl?: number): Promise<void> {
-    await this.cacheManager.set(key, value, ttl || CACHE_TTL.MEDIUM);
+  async set(key: string, value: any, ttl?: number): Promise<void> {
+    await this.cacheManager.set(key, value, ttl);
   }
 
   async del(key: string): Promise<void> {
     await this.cacheManager.del(key);
   }
 
-  async reset(): Promise<void> {
-    await this.cacheManager.reset();
-  }
-
-  async keys(pattern?: string): Promise<string[]> {
-    if (!pattern) {
-      return [];
+  async deletePattern(pattern: string): Promise<number> {
+    // Access the underlying store to use the keys method
+    const store = (this.cacheManager as any).store;
+    if (typeof store.keys !== 'function') {
+      throw new Error('Cache store does not support keys()');
     }
-    // Note: This depends on the cache store implementation
-    return [];
+    const keys: string[] = await store.keys(pattern);
+    if (keys.length > 0) {
+      await Promise.all(keys.map((key: string) => this.cacheManager.del(key)));
+    }
+    return keys.length;
   }
 
-  async mget<T>(...keys: string[]): Promise<(T | undefined)[]> {
-    const promises = keys.map(key => this.get<T>(key));
-    return Promise.all(promises);
-  }
-
-  async mset<T>(keyValuePairs: Array<{ key: string; value: T; ttl?: number }>): Promise<void> {
-    const promises = keyValuePairs.map(({ key, value, ttl }) => 
-      this.set(key, value, ttl)
-    );
-    await Promise.all(promises);
-  }
-
-  async increment(key: string, amount = 1): Promise<number> {
-    const current = await this.get<number>(key) || 0;
-    const newValue = current + amount;
-    await this.set(key, newValue);
-    return newValue;
-  }
-
-  async decrement(key: string, amount = 1): Promise<number> {
-    return this.increment(key, -amount);
-  }
-
-  generateKey(...parts: string[]): string {
-    return parts.join(':');
+  generateKey(...args: string[]): string {
+    return args.join(':');
   }
 }

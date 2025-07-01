@@ -5,6 +5,7 @@ import { LoggerService } from './shared/logger/logger.service';
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AdminSeeder } from './database/seeds/admin.seed';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -69,6 +70,15 @@ async function bootstrap() {
       tagsSorter: 'alpha',
     }
   });
+
+  // Run admin seeder
+  try {
+    const adminSeeder = app.get(AdminSeeder);
+    await adminSeeder.seed();
+    logger.log('Admin seeding completed');
+  } catch (error) {
+    logger.error('Error during admin seeding:', error);
+  }
 
   const port = configService.get<number>('app.port') || 3000;
   await app.listen(port, () => {

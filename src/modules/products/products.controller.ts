@@ -1,0 +1,238 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  HttpStatus,
+  ParseUUIDPipe
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiParam
+} from '@nestjs/swagger';
+import { ProductsService } from './products.service';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  ProductQueryDto,
+  ProductResponseDto,
+  BarcodeScanDto
+} from './dto';
+import { JwtAuthGuard } from '../../common/guards';
+import { Roles } from '../../common/decorators';
+import { RolesGuard } from '../../common/guards';
+import { UserRole } from '../../common/enums';
+import { ResponseDto } from '../../common/dto';
+import { PaginatedResult } from '@/common/interfaces';
+
+@ApiTags('Products')
+@ApiBearerAuth('access-token')
+@Controller('products')
+@UseGuards(JwtAuthGuard)
+export class ProductsController {
+  constructor(private readonly productsService: ProductsService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new product or service' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Product created successfully',
+    type: ProductResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Product with SKU or barcode already exists'
+  })
+  async create(@Body() createProductDto: CreateProductDto): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.create(createProductDto);
+    return {
+      success: true,
+      message: 'Product created successfully',
+      data: product
+    };
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all products with filtering and pagination' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Products retrieved successfully'
+  })
+  async findAll(@Query() query: ProductQueryDto): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.findAll(query);
+    return {
+      success: true,
+      message: 'Products retrieved successfully',
+      data: result
+    };
+  }
+
+  @Get('categories')
+  @ApiOperation({ summary: 'Get all product categories' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Categories retrieved successfully'
+  })
+  async getCategories(): Promise<ResponseDto<string[]>> {
+    const categories = await this.productsService.getCategories();
+    return {
+      success: true,
+      message: 'Categories retrieved successfully',
+      data: categories
+    };
+  }
+
+  @Get('low-stock')
+  @ApiOperation({ summary: 'Get products with low stock' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Low stock products retrieved successfully'
+  })
+  async getLowStockProducts(): Promise<ResponseDto<ProductResponseDto[]>> {
+    const products = await this.productsService.getLowStockProducts();
+    return {
+      success: true,
+      message: 'Low stock products retrieved successfully',
+      data: products
+    };
+  }
+
+  @Get('expired')
+  @ApiOperation({ summary: 'Get expired products' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Expired products retrieved successfully'
+  })
+  async getExpiredProducts(): Promise<ResponseDto<ProductResponseDto[]>> {
+    const products = await this.productsService.getExpiredProducts();
+    return {
+      success: true,
+      message: 'Expired products retrieved successfully',
+      data: products
+    };
+  }
+
+  @Post('barcode-scan')
+  @ApiOperation({ summary: 'Find product by barcode scan' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product found successfully',
+    type: ProductResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product with barcode not found'
+  })
+  async scanBarcode(@Body() barcodeScanDto: BarcodeScanDto): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.findByBarcode(barcodeScanDto.barcode);
+    return {
+      success: true,
+      message: 'Product found successfully',
+      data: product
+    };
+  }
+
+  @Post('bulk-import')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Bulk import products from Excel/CSV file' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Bulk import completed'
+  })
+  async bulkImport(
+    @UploadedFile() file: Express.Multer.File
+  ): Promise<ResponseDto<{ success: number; errors: string[] }>> {
+    const result = await this.productsService.bulkImport(file);
+    return {
+      success: true,
+      message: `Bulk import completed. ${result.success} products imported successfully`,
+      data: result
+    };
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get product by ID' })
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product retrieved successfully',
+    type: ProductResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product not found'
+  })
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.findOne(id);
+    return {
+      success: true,
+      message: 'Product retrieved successfully',
+      data: product
+    };
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update product by ID' })
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product updated successfully',
+    type: ProductResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product not found'
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Product with SKU or barcode already exists'
+  })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateProductDto: UpdateProductDto
+  ): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.update(id, updateProductDto);
+    return {
+      success: true,
+      message: 'Product updated successfully',
+      data: product
+    };
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete product by ID' })
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product deleted successfully'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product not found'
+  })
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto<null>> {
+    await this.productsService.remove(id);
+    return {
+      success: true,
+      message: 'Product deleted successfully',
+      data: null
+    };
+  }
+}

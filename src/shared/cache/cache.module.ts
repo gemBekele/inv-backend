@@ -1,30 +1,32 @@
-import { Module, Global } from '@nestjs/common';
-import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
+import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { redisStore } from 'cache-manager-redis-store';
-import { CacheService } from './cache.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheService } from '@/shared/cache/cache.service';
+import { redisConfig } from '@/config';
 
-@Global()
 @Module({
   imports: [
-    NestCacheModule.registerAsync({
+    ConfigModule.forRoot({
+      load: [redisConfig],
+    }),
+    CacheModule.registerAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
         const redisConfig = configService.get('redis');
-        
         return {
-          store: redisStore as any,
-          host: redisConfig.host,
-          port: redisConfig.port,
-          password: redisConfig.password,
-          db: redisConfig.db,
-          ttl: redisConfig.ttl,
+          store: await redisStore({
+            url: `redis://${redisConfig.host}:${redisConfig.port}`,
+            password: redisConfig.password,
+            database: redisConfig.db,
+            ttl: redisConfig.ttl,
+          }),
         };
       },
+      inject: [ConfigService],
     }),
   ],
   providers: [CacheService],
-  exports: [CacheService],
 })
-export class CacheModule {}
+export class RedisCacheModule {}

@@ -14,6 +14,7 @@ A comprehensive, modular, and production-ready NestJS backend starter template.
 - **Caching:** Redis cache module.
 - **Docker Ready:** Dockerfile and docker-compose for easy setup.
 - **Environment Config:** `.env` support for all configuration.
+- **Yarn Support:** Uses [Yarn](https://yarnpkg.com/) for dependency management.
 
 ## Getting Started
 
@@ -27,9 +28,7 @@ cd nestjs-backend-starter
 ### 2. Install dependencies
 
 ```bash
-pnpm install
-# or
-npm install
+yarn install
 ```
 
 ### 3. Configure Environment
@@ -53,9 +52,7 @@ This will start both the backend and a PostgreSQL database.
 Make sure PostgreSQL and Redis are running and `.env` is configured.
 
 ```bash
-pnpm start:dev
-# or
-npm run start:dev
+yarn start:dev
 ```
 
 ### 6. Database Migrations
@@ -63,13 +60,13 @@ npm run start:dev
 Generate a migration after changing entities:
 
 ```bash
-pnpm migration:generate --name MigrationName
+yarn migration:generate --name MigrationName
 ```
 
 Run migrations:
 
 ```bash
-pnpm migration:run
+yarn migration:run
 ```
 
 ### 7. API Documentation
@@ -97,11 +94,11 @@ src/
 
 | Command                   | Description                       |
 |---------------------------|-----------------------------------|
-| `pnpm start:dev`          | Start in watch mode               |
-| `pnpm build`              | Build the project                 |
-| `pnpm migration:generate` | Generate a new migration          |
-| `pnpm migration:run`      | Run pending migrations            |
-| `pnpm test`               | Run unit tests                    |
+| `yarn start:dev`          | Start in watch mode               |
+| `yarn build`              | Build the project                 |
+| `yarn migration:generate` | Generate a new migration          |
+| `yarn migration:run`      | Run pending migrations            |
+| `yarn test`               | Run unit tests                    |
 | `docker compose up`       | Start app and DB with Docker      |
 
 ---

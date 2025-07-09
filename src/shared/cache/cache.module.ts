@@ -15,13 +15,13 @@ import { redisConfig } from '@/config';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
         const redisConfig = configService.get('redis');
-         const url = `rediss://${redisConfig.username}:${redisConfig.password}@${redisConfig.host}:${redisConfig.port}`;
-        //  const url = `redis://${redisConfig.host}:${redisConfig.port}`;
+        //  const url = `rediss://${redisConfig.username}:${redisConfig.password}@${redisConfig.host}:${redisConfig.port}`;
+         const url = `redis://${redisConfig.host}:${redisConfig.port}`;
         return {
           store: await redisStore({
             url,
-            // password: redisConfig.password,
-            // database: redisConfig.db,
+            password: redisConfig.password,
+            database: redisConfig.db,
             ttl: redisConfig.ttl,
           }),
         };

@@ -1,6 +1,7 @@
-import { Entity, Column, ManyToMany, OneToMany } from 'typeorm';
+import { Entity, Column, ManyToMany, OneToMany, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/entities/base.entity';
 import { WarehouseProduct } from './warehouse-product.entity';
+import { Company } from '../../company/entities/company.entity';
 
 @Entity('warehouses')
 export class Warehouse extends BaseEntity {
@@ -12,4 +13,7 @@ export class Warehouse extends BaseEntity {
 
   @OneToMany(() => WarehouseProduct, warehouseProduct => warehouseProduct.warehouse)
   products: WarehouseProduct[];
+
+  @ManyToOne(() => Company, company => company.warehouses)
+  company: Company;
 }

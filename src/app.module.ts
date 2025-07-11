@@ -13,6 +13,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CustomerModule } from './modules/customer/customer.module';
+import { CompanyModule } from './modules/company/company.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { CustomerModule } from './modules/customer/customer.module';
     ProductsModule,
     WarehouseModule,
     CustomerModule,
+    CompanyModule,
   ],
   providers: [
     {

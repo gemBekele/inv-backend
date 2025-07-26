@@ -4,7 +4,7 @@ import { ShopsService } from './shops.service';
 import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto } from './dto';
 import { PaginatedResult } from '@/common/interfaces';
 
-@ApiTags('shops')
+@ApiTags('Shops')
 @Controller('shops')
 export class ShopsController {
   constructor(private readonly shopService: ShopsService) {}

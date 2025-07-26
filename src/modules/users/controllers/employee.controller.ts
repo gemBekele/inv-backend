@@ -4,7 +4,7 @@ import { EmployeeService } from '../services/employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, EmployeeQueryDto, EmployeeResponseDto } from '../dto/employee';
 import { PaginatedResult } from '@/common/interfaces';
 
-@ApiTags('employees')
+@ApiTags('Employees')
 @Controller('employees')
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}

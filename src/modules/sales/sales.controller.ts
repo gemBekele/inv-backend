@@ -5,7 +5,7 @@ import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './d
 import { PaginatedResult } from '@/common/interfaces';
 import { SaleStatus } from './enums';
 
-@ApiTags('sales')
+@ApiTags('Sales')
 @Controller('sales')
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}

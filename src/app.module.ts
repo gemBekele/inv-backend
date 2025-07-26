@@ -14,6 +14,9 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CompanyModule } from './modules/company/company.module';
+import { ShopsModule } from '@/modules/shops/shops.module';
+import { SalesModule } from '@/modules/sales/sales.module';
+import { CommissionModule } from '@/modules/commission/commission.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { CompanyModule } from './modules/company/company.module';
     WarehouseModule,
     CustomerModule,
     CompanyModule,
+    ShopsModule,
+    SalesModule,
+    CommissionModule,
   ],
   providers: [
     {

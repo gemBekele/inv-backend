@@ -13,6 +13,9 @@ export class WarehouseProduct extends BaseEntity {
   product: Product;
 
   @Column({ type: 'int', default: 0 })
+  quantity: number;
+
+  @Column({ type: 'int', default: 0 })
   stockQuantity: number;
 
   @Column({ type: 'int', default: 0 })

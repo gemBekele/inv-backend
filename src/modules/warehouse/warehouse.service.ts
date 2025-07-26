@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Warehouse } from './entities/warehouse.entity';
@@ -7,6 +7,9 @@ import { WarehouseProduct } from './entities/warehouse-product.entity';
 import { CreateWarehouseDto, UpdateWarehouseDto, WarehouseQueryDto, WarehouseResponseDto, WarehouseDetailResponseDto, AttachProductDto } from './dto';
 import { PaginatedResult } from '../../common/interfaces';
 import { ProductResponseDto } from '../products/dto';
+import { User } from '../users/entities/user.entity';
+import { Shop } from '../shops/entities/shops.entity';
+import { UserRole } from '@/common/enums';
 
 @Injectable()
 export class WarehouseService {
@@ -17,6 +20,8 @@ export class WarehouseService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(WarehouseProduct)
     private readonly warehouseProductRepository: Repository<WarehouseProduct>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
   ) {}
 
   async create(createWarehouseDto: CreateWarehouseDto): Promise<WarehouseResponseDto> {
@@ -157,6 +162,34 @@ async findProductOfWarehouse(warehouseId: string, productId: string): Promise<Wa
     }
     warehouseProduct.stockQuantity = stockQuantity;
     await this.warehouseProductRepository.save(warehouseProduct);
+  }
+
+  async transferProducts(warehouseId: string, shopId: string, productId: string, quantity: number, user: User) {
+    if (user.role !== UserRole.COMPANY_ADMIN) throw new ForbiddenException('Only company owners can transfer products');
+
+    const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId }, relations: ['products', 'company'] });
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+
+    const shop = await this.shopRepository.findOne({ where: { id: shopId }, relations: ['warehouse'] });
+    if (!shop || shop.warehouse.id !== warehouseId) throw new NotFoundException('Shop not found or not associated with warehouse');
+
+    const warehouseProduct = await this.warehouseProductRepository.findOne({ where: { id: productId, warehouse: { id: warehouseId } } });
+    if (!warehouseProduct || warehouseProduct.quantity < quantity) throw new NotFoundException('Insufficient product quantity');
+
+    // Update warehouse product quantity
+    warehouseProduct.quantity -= quantity;
+    await this.warehouseProductRepository.save(warehouseProduct);
+
+    // Add to shop (assuming a ShopProduct entity or similar; adjust as needed)
+    // For simplicity, we'll assume a similar entity; you may need to create ShopProduct
+    const shopProduct = this.warehouseProductRepository.create({
+      product: warehouseProduct.product,
+      quantity,
+      warehouse: shop.warehouse,
+    });
+    await this.warehouseProductRepository.save(shopProduct);
+
+    return { message: 'Product transferred successfully' };
   }
 
   async recordSale(warehouseId: string, productId: string, quantity: number, revenue: number): Promise<void> {

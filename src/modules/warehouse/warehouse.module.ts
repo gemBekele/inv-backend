@@ -5,10 +5,11 @@ import { WarehouseProduct } from './entities/warehouse-product.entity';
 import { WarehouseService } from './warehouse.service';
 import { WarehouseController } from './warehouse.controller';
 import { Product } from '../products/entities/product.entity';
+import { Shop } from '../shops/entities/shops.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Warehouse, WarehouseProduct, Product]),
+    TypeOrmModule.forFeature([Warehouse, WarehouseProduct, Product, Shop]),
   ],
   controllers: [WarehouseController],
   providers: [WarehouseService],

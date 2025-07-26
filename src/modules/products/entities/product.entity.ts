@@ -3,6 +3,7 @@ import { BaseEntity } from '../../../database/entities/base.entity';
 import { ProductType } from '../enums/product-type.enum';
 import { ProductStatus } from '../enums/product-status.enum';
 import { WarehouseProduct } from '../..//warehouse/entities/warehouse-product.entity';
+import { Commission } from '../../commission/entities/commission.entity';
 
 @Entity('products')
 @Index(['sku'], { unique: true })
@@ -32,6 +33,9 @@ export class Product extends BaseEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  commissionRate: number; // Commission rate in percent, e.g. 5 for 5%
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   cost: number;
 
@@ -55,6 +59,9 @@ export class Product extends BaseEntity {
 
    @OneToMany(() => WarehouseProduct, warehouseProduct => warehouseProduct.product)
   warehouseProducts: WarehouseProduct[];
+
+  @OneToMany(() => Commission, commission => commission.product)
+  commission: Commission[];
 
   // Auto-generate SKU if not provided
   @BeforeInsert()

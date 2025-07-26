@@ -1,6 +1,7 @@
 import { BaseEntity } from '../../../database/entities/base.entity';
 import { Warehouse } from '../../warehouse/entities/warehouse.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('companies')
 export class Company extends BaseEntity {
@@ -27,5 +28,4 @@ export class Company extends BaseEntity {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updatedAt: Date;
-
 }

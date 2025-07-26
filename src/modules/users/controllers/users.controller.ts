@@ -9,15 +9,15 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { AdminUpdateUserDto } from './dto/admin-user-update.dto';
-import { JwtAuthGuard, RolesGuard } from '../../common/guards';
+import { UsersService } from '@/modules/users/services/users.service';
+import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
+import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
+import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { CurrentUser, Roles } from '../../common/decorators';
-import { User } from './entities/user.entity';
-import { PaginationDto } from '../../common/dto';
+import { CurrentUser, Roles } from '@/common/decorators';
+import { User } from '../../users/entities/user.entity';
+import { PaginationDto } from '@/common/dto';
 import { UserRole } from '@/common/enums';
 
 @ApiTags('Users')

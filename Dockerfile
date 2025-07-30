@@ -6,6 +6,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json yarn.lock ./
 
+#RUN apk add bash 
+
 # Install dependencies using yarn (which is expected to be available)
 RUN yarn install --frozen-lockfile
 
@@ -32,8 +34,9 @@ COPY --from=builder /app/dist ./dist
 # Copy source files needed for migrations (TypeORM needs the source files)
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/scripts ./scripts
 
-RUN chmod +x /scripts/migration.sh
+RUN chmod +x ./scripts/migration.sh
 
 # Expose the application port
 EXPOSE 3000

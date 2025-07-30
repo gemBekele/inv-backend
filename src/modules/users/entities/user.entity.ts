@@ -62,10 +62,10 @@ export class User extends BaseEntity {
   @OneToMany(() => Employee, employee => employee.user)
   employees: Employee[];
 
-  @OneToMany(() => Shop, shop => shop.employees)
+  @OneToMany(() => Shop, shop => shop.id)
   shops: Shop[];
 
-  @OneToMany(() => Warehouse, warehouse => warehouse.employees)
+  @OneToMany(() => Warehouse, warehouse => warehouse.manager)
   warehouses: Warehouse[];
 
   @BeforeInsert()

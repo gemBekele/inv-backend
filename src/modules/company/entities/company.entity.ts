@@ -20,12 +20,6 @@ export class Company extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @OneToMany(() => Warehouse, warehouse => warehouse.company)
+  @OneToMany(() => Warehouse, warehouse => warehouse.company, {eager: true})
   warehouses: Warehouse[];
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  createdAt: Date;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-  updatedAt: Date;
 }

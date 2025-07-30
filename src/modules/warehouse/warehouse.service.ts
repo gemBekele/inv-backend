@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Warehouse } from './entities/warehouse.entity';
 import { Product } from '../products/entities/product.entity';
 import { WarehouseProduct } from './entities/warehouse-product.entity';
+import { Company } from '../company/entities/company.entity';
 import { CreateWarehouseDto, UpdateWarehouseDto, WarehouseQueryDto, WarehouseResponseDto, WarehouseDetailResponseDto, AttachProductDto } from './dto';
 import { PaginatedResult } from '../../common/interfaces';
 import { ProductResponseDto } from '../products/dto';
@@ -22,17 +23,45 @@ export class WarehouseService {
     private readonly warehouseProductRepository: Repository<WarehouseProduct>,
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async create(createWarehouseDto: CreateWarehouseDto): Promise<WarehouseResponseDto> {
-    const warehouse = this.warehouseRepository.create(createWarehouseDto);
+    const { companyId, managerId, ...warehouseData } = createWarehouseDto;
+    
+    // Validate that the company exists
+    const company = await this.companyRepository.findOne({ where: { id: companyId } });
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
+    // Validate manager if provided
+    let manager = null;
+    if (managerId) {
+      manager = await this.userRepository.findOne({ where: { id: managerId } });
+      if (!manager) {
+        throw new NotFoundException('Manager not found');
+      }
+    }
+
+    const warehouse = this.warehouseRepository.create({
+      ...warehouseData,
+      company,
+      manager,
+    });
+    
     const savedWarehouse = await this.warehouseRepository.save(warehouse);
     return this.mapToResponseDto(savedWarehouse);
   }
 
   async findAll(query: WarehouseQueryDto): Promise<PaginatedResult<WarehouseResponseDto>> {
     const { page = 1, limit = 10, search } = query;
-    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse');
+    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.company', 'company')
+      .leftJoinAndSelect('warehouse.manager', 'manager');
     if (search) {
       queryBuilder.where('warehouse.name LIKE :search', { search: `%${search}%` });
     }
@@ -41,7 +70,7 @@ export class WarehouseService {
       .take(limit)
       .getManyAndCount();
     return {
-      data: warehouses.map(this.mapToResponseDto),
+      data: warehouses.map(w => this.mapToResponseDto(w)),
       total,
       page,
       limit,
@@ -214,6 +243,10 @@ async findProductOfWarehouse(warehouseId: string, productId: string): Promise<Wa
       id: warehouse.id,
       name: warehouse.name,
       location: warehouse.location,
+      description: warehouse.description,
+      capacity: warehouse.capacity,
+      companyName: warehouse.company?.name,
+      managerName: warehouse.manager?.fullName,
       createdAt: warehouse.createdAt,
       updatedAt: warehouse.updatedAt,
     };

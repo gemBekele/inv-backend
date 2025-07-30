@@ -159,6 +159,19 @@ export class CreateProductDto {
   taxRate?: number;
 
   @ApiPropertyOptional({ 
+    description: 'Commission rate percentage for sales',
+    example: 5.0,
+    minimum: 0,
+    maximum: 100
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  commissionRate?: number;
+
+  @ApiPropertyOptional({ 
     description: 'Whether to track stock for this product',
     default: true
   })

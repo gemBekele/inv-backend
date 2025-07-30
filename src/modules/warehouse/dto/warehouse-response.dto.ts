@@ -11,6 +11,18 @@ export class WarehouseResponseDto {
 	@ApiPropertyOptional({ description: 'Location of the warehouse' })
 	location?: string;
 
+	@ApiPropertyOptional({ description: 'Description of the warehouse' })
+	description?: string;
+
+	@ApiPropertyOptional({ description: 'Maximum capacity of the warehouse' })
+	capacity?: number;
+
+	@ApiPropertyOptional({ description: 'Company name that owns this warehouse' })
+	companyName?: string;
+
+	@ApiPropertyOptional({ description: 'Manager name of this warehouse' })
+	managerName?: string;
+
 	@ApiProperty({ description: 'Date when the warehouse was created', type: String, format: 'date-time' })
 	createdAt: Date;
 

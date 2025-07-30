@@ -20,18 +20,38 @@ export class CompanyService {
 	if (existingCompany) {
 	  throw new ConflictException('Company with this name already exists');
 	}
-	const warehouseExists = await this.warehouseRepository.findOne({ where: { id:In (createCompanyDto.warehouseIds) } });
-	if (!warehouseExists) {
-	  throw new NotFoundException('Warehouse not found');
-	}
-    const company = this.companyRepository.create(createCompanyDto);
+
+    // Create company first
+    const { warehouseIds, ...companyData } = createCompanyDto;
+    const company = this.companyRepository.create(companyData);
     const savedCompany = await this.companyRepository.save(company);
-    return this.mapToResponseDto(savedCompany);
+
+    // Associate warehouses if provided
+    if (warehouseIds && warehouseIds.length > 0) {
+      const warehouses = await this.warehouseRepository.findBy({ id: In(warehouseIds) });
+      if (warehouses.length !== warehouseIds.length) {
+        throw new NotFoundException('One or more warehouses not found');
+      }
+      
+      // Update warehouses to associate with the company
+      for (const warehouse of warehouses) {
+        warehouse.company = savedCompany;
+        await this.warehouseRepository.save(warehouse);
+      }
+    }
+
+    // Return company with warehouses
+    const companyWithWarehouses = await this.companyRepository.findOne({ 
+      where: { id: savedCompany.id }, 
+      relations: ['warehouses'] 
+    });
+    return this.mapToResponseDto(companyWithWarehouses);
   }
 
   async findAll(query: CompanyQueryDto): Promise<PaginatedResult<CompanyResponseDto>> {
     const { search } = query;
-    const queryBuilder = this.companyRepository.createQueryBuilder('company');
+    const queryBuilder = this.companyRepository.createQueryBuilder('company')
+      .leftJoinAndSelect('company.warehouses', 'warehouses');
     if (search) {
       queryBuilder.where('company.name LIKE :search OR company.address LIKE :search', { search: `%${search}%` });
     }
@@ -49,7 +69,10 @@ export class CompanyService {
   }
 
   async findOne(id: string): Promise<CompanyResponseDto> {
-    const company = await this.companyRepository.findOne({ where: { id } });
+    const company = await this.companyRepository.findOne({ 
+      where: { id }, 
+      relations: ['warehouses'] 
+    });
     if (!company) throw new NotFoundException('Company not found');
     return this.mapToResponseDto(company);
   }
@@ -98,7 +121,7 @@ export class CompanyService {
       phoneNumber: company.phoneNumber,
       email: company.email,
       description: company.description,
-	  warehouse: company.warehouses ? company.warehouses.map(warehouse => warehouse.id) : [],
+	  warehouses: company.warehouses ? company.warehouses.map(warehouse => warehouse.id) : [],
       createdAt: company.createdAt,
       updatedAt: company.updatedAt,
     };

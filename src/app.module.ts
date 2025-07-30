@@ -10,7 +10,6 @@ import * as config from './config';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProductsModule } from './modules/products/products.module';
-import { CacheModule } from '@nestjs/cache-manager';
 import { WarehouseModule } from './modules/warehouse/warehouse.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { CompanyModule } from './modules/company/company.module';
@@ -30,9 +29,6 @@ import { CommissionModule } from '@/modules/commission/commission.module';
         config.redisConfig,
         config.swaggerConfig,
       ],
-    }),
-    CacheModule.register({
-      isGlobal: true,
     }),
     DatabaseModule,
     RedisCacheModule,

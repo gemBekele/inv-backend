@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +18,11 @@ import {
   ApiResponse,
   ApiQuery,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@/common/guards';
+import { Roles } from '@/common/decorators';
+import { UserRole } from '@/common/enums';
 import { WarehouseService } from './warehouse.service';
 import {
   CreateWarehouseDto,
@@ -30,7 +35,9 @@ import {
 import { PaginatedResult } from '@/common/interfaces';
 
 @ApiTags('Warehouses')
+@ApiBearerAuth('access-token')
 @Controller('warehouses')
+@UseGuards(JwtAuthGuard)
 export class WarehouseController {
   constructor(private readonly warehouseService: WarehouseService) {}
 

@@ -1,13 +1,18 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, Patch } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, Patch, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './dto';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { SaleStatus } from './enums';
+import { JwtAuthGuard } from '@/common/guards';
+import { Roles } from '@/common/decorators';
+import { UserRole } from '@/common/enums';
 
 @ApiTags('Sales')
+@ApiBearerAuth('access-token')
 @Controller('sales')
+@UseGuards(JwtAuthGuard)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 

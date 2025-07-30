@@ -16,6 +16,8 @@ import { CompanyModule } from './modules/company/company.module';
 import { ShopsModule } from '@/modules/shops/shops.module';
 import { SalesModule } from '@/modules/sales/sales.module';
 import { CommissionModule } from '@/modules/commission/commission.module';
+import { CollectionsModule } from '@/modules/collections/collections.module';
+import { SettingsModule } from '@/modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { CommissionModule } from '@/modules/commission/commission.module';
     ShopsModule,
     SalesModule,
     CommissionModule,
+    CollectionsModule,
+    SettingsModule,
   ],
   providers: [
     {

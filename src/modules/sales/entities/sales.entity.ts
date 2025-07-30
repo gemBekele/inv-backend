@@ -8,6 +8,7 @@ import { PaymentTransaction } from './payment-transaction.entity';
 import { PaymentType, SaleStatus, DiscountType, TransactionType } from '../enums';
 import { User } from '../../users/entities/user.entity';
 import { Shop } from '../../shops/entities/shops.entity';
+import { Branch } from '../../collections/entities/branch.entity';
 
 @Entity('sales')
 export class Sales extends BaseEntity {
@@ -74,6 +75,10 @@ export class Sales extends BaseEntity {
   @ManyToOne(() => Shop, shop => shop.sales, { nullable: true })
   @JoinColumn({ name: 'shop_id' })
   shop?: Shop;
+
+  @ManyToOne(() => Branch, branch => branch.sales, { nullable: true })
+  @JoinColumn({ name: 'branch_id' })
+  branch?: Branch;
 
   @ManyToOne(() => User, user => user.id)
   @JoinColumn({ name: 'created_by' })

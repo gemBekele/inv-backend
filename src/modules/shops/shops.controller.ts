@@ -1,11 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { ShopsService } from './shops.service';
 import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto } from './dto';
 import { PaginatedResult } from '@/common/interfaces';
+import { JwtAuthGuard } from '@/common/guards';
+import { Roles } from '@/common/decorators';
+import { UserRole } from '@/common/enums';
 
 @ApiTags('Shops')
+@ApiBearerAuth('access-token')
 @Controller('shops')
+@UseGuards(JwtAuthGuard)
 export class ShopsController {
   constructor(private readonly shopService: ShopsService) {}
 

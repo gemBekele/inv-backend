@@ -2,7 +2,7 @@
 
 import { IsEnum, IsOptional, IsString, IsBoolean } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { UserRole, UserStatus } from '../../../common/enums';
+import { UserRole, UserStatus } from '../../../../common/enums';
 import { UpdateUserDto } from './update-user.dto';
 
 export class AdminUpdateUserDto extends UpdateUserDto {

@@ -1,11 +1,11 @@
 import { Injectable, UnauthorizedException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../users/users.service';
+import { UsersService } from '@/modules/users/services/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto, AdminCreateUserDto } from './dto/register.dto';
-import { User } from '../users/entities/user.entity';
-import { UserRole, UserStatus } from '../../common/enums';
+import { User } from '@/modules/users/entities/user.entity';
+import { UserRole, UserStatus } from '@/common/enums';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()

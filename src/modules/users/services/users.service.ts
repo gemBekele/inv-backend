@@ -3,12 +3,12 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { AdminUpdateUserDto } from './dto/admin-user-update.dto';
-import { User } from './entities/user.entity';
-import { UserRole, UserStatus } from '../../common/enums';
-import { PaginationDto } from '../../common/dto';
+import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
+import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
+import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
+import { User } from '../../users/entities/user.entity';
+import { UserRole, UserStatus } from '@/common/enums';
+import { PaginationDto } from '@/common/dto';
 
 @Injectable()
 export class UsersService {

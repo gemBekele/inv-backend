@@ -2,6 +2,10 @@ export const CACHE_KEYS = {
   // User related
   USER_PROFILE: 'user:profile',
   USER_PERMISSIONS: 'user:permissions',
+
+  // Employee related
+  EMPLOYEE_LIST: 'employee:list',
+  EMPLOYEE_DETAIL: 'employee:detail',
   
   // Product related
   PRODUCTS_LIST: 'products:list',
@@ -9,6 +13,14 @@ export const CACHE_KEYS = {
   PRODUCT_CATEGORIES: 'products:categories',
   PRODUCT_LOW_STOCK: 'products:low-stock',
   PRODUCT_EXPIRED: 'products:expired',
+
+  //sales related
+  SALES_LIST: 'sales:list',
+  SALE_DETAIL: 'sales:detail',
+
+  //shop related
+  SHOPS_LIST: 'shops:list',
+  SHOP_DETAIL: 'shops:detail',
   
   // Warehouse related
   WAREHOUSES_LIST: 'warehouses:list',

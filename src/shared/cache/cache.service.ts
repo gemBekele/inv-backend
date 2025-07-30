@@ -7,28 +7,51 @@ export class CacheService {
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
   async get<T>(key: string): Promise<T | undefined> {
-    return this.cacheManager.get<T>(key);
+    try {
+      return await this.cacheManager.get<T>(key);
+    } catch (error) {
+      console.warn('Cache get error:', error.message);
+      return undefined;
+    }
   }
 
   async set(key: string, value: any, ttl?: number): Promise<void> {
-    await this.cacheManager.set(key, value, ttl);
+    try {
+      await this.cacheManager.set(key, value, ttl);
+    } catch (error) {
+      console.warn('Cache set error:', error.message);
+    }
   }
 
   async del(key: string): Promise<void> {
-    await this.cacheManager.del(key);
+    try {
+      await this.cacheManager.del(key);
+    } catch (error) {
+      console.warn('Cache del error:', error.message);
+    }
   }
 
   async deletePattern(pattern: string): Promise<number> {
-    // Access the underlying store to use the keys method
-    const store = (this.cacheManager as any).store;
-    if (typeof store.keys !== 'function') {
-      throw new Error('Cache store does not support keys()');
+    try {
+      // Access the underlying store to use the keys method
+      const store = (this.cacheManager as any).store;
+      
+      // Check if store exists and has keys method
+      if (!store || typeof store.keys !== 'function') {
+        console.warn('Cache store does not support pattern deletion, skipping...');
+        return 0;
+      }
+      
+      const keys: string[] = await store.keys(pattern);
+      if (keys && keys.length > 0) {
+        await Promise.all(keys.map((key: string) => this.cacheManager.del(key)));
+        return keys.length;
+      }
+      return 0;
+    } catch (error) {
+      console.warn('Error deleting cache pattern:', error.message);
+      return 0;
     }
-    const keys: string[] = await store.keys(pattern);
-    if (keys.length > 0) {
-      await Promise.all(keys.map((key: string) => this.cacheManager.del(key)));
-    }
-    return keys.length;
   }
 
   generateKey(...args: string[]): string {

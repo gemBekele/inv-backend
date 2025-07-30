@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { CommissionService } from './commission.service';
 import { CreateCommissionDto } from './dto/create-commission.dto';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CommissionResponseDto } from './dto/commision-resposne.dto';
+import { JwtAuthGuard } from '@/common/guards';
+import { Roles } from '@/common/decorators';
+import { UserRole } from '@/common/enums';
 
 @ApiTags('Commissions')
 @ApiBearerAuth('access-token')
 @Controller('Commissions')
+@UseGuards(JwtAuthGuard)
 export class CommissionController {
   constructor(private readonly commissionService: CommissionService) {}
 

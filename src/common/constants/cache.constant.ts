@@ -36,6 +36,7 @@ export const CACHE_KEYS = {
   SALES_REPORT: 'reports:sales',
   
   // Settings
+  SETTINGS: 'settings:general',
   COMPANY_SETTINGS: 'settings:company',
   SYSTEM_SETTINGS: 'settings:system',
 } as const;

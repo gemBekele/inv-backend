@@ -1,14 +1,12 @@
+# --- Builder Stage ---
 FROM node:20-alpine AS builder
-
-# Install Yarn (pick any stable version you want, eg: 1.22.19)
-RUN npm install -g yarn@1.22.19
 
 WORKDIR /app
 
 # Copy package files
 COPY package.json yarn.lock ./
 
-# Install dependencies
+# Install dependencies using yarn (which is expected to be available)
 RUN yarn install --frozen-lockfile
 
 # Copy source code
@@ -17,29 +15,31 @@ COPY . .
 # Build the app
 RUN yarn build
 
-# ------------------ Production Stage ------------------
+# --- Production Stage ---
 FROM node:20-alpine AS production
-
-# Install Yarn again for production stage
-RUN npm install -g yarn@1.22.19
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files (only package.json and yarn.lock are strictly needed for --production install)
 COPY package.json yarn.lock ./
 
-# Install only production deps
+# Install only production dependencies
 RUN yarn install --production --frozen-lockfile
 
-# Copy built app from builder
+# Copy built app from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Expose port
+# Copy source files needed for migrations (TypeORM needs the source files)
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+
+RUN chmod +x /scripts/migration.sh
+
+# Expose the application port
 EXPOSE 3000
 
-# Optional health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node dist/scripts/health-check.js
+  CMD node dist/scripts/health-check.js || exit 1
 
-# Start the app
-CMD ["yarn", "start:prod"]
+# Start the application in production mode
+CMD ["npm", "run", "start:prod"]

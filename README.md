@@ -117,10 +117,10 @@ The API will be available at http://localhost:3000
 
 ```bash
 # Generate a new migration after entity changes
-yarn migration:generate --name DescriptiveMigrationName
+yarn migration:generate --name=DescriptiveMigrationName
 
 # Create an empty migration file
-yarn migration:create --name CustomMigrationName
+yarn migration:create --name=CustomMigrationName
 
 # Run pending migrations
 yarn migration:run

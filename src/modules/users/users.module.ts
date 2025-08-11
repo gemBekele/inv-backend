@@ -6,13 +6,14 @@ import { User } from './entities/user.entity';
 import { EmployeeService } from './services/employee.service';
 import { Shop } from '../shops/entities/shops.entity';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
+import { Company } from '../company/entities/company.entity';
 import { Employee } from './entities/employee.entity';
 import { CacheService } from '@/shared/cache/cache.service';
 import { EmployeeController } from './controllers/employee.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Employee, Shop, Warehouse]),
+    TypeOrmModule.forFeature([User, Employee, Shop, Warehouse, Company]),
 ],
   controllers: [UsersController, EmployeeController],
   providers: [UsersService, EmployeeService, CacheService],

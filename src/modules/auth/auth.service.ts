@@ -17,7 +17,7 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, password: string): Promise<User> {
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.usersService.findByEmailWithAssociations(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -43,7 +43,10 @@ export class AuthService {
       email: user.email, 
       role: user.role,
       firstName: user.firstName,
-      lastName: user.lastName 
+      lastName: user.lastName,
+      companyId: user.company?.id,
+      shopId: user.shop?.id,
+      warehouseId: user.warehouse?.id
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -59,6 +62,11 @@ export class AuthService {
       accessToken,
       refreshToken,
       user: userWithoutPassword,
+      routing: {
+        companyId: user.company?.id,
+        shopId: user.shop?.id,
+        warehouseId: user.warehouse?.id
+      }
     };
   }
 
@@ -120,12 +128,16 @@ export class AuthService {
         throw new UnauthorizedException('Invalid refresh token');
       }
 
+      const userWithAssociations = await this.usersService.findByIdWithAssociations(user.id);
       const newPayload = { 
         sub: user.id, 
         email: user.email, 
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName 
+        lastName: user.lastName,
+        companyId: userWithAssociations.company?.id,
+        shopId: userWithAssociations.shop?.id,
+        warehouseId: userWithAssociations.warehouse?.id
       };
 
       return {

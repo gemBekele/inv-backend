@@ -1,11 +1,16 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { EmployeeService } from '../services/employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, EmployeeQueryDto, EmployeeResponseDto } from '../dto/employee';
 import { PaginatedResult } from '@/common/interfaces';
+import { JwtAuthGuard } from '@/common/guards';
+import { Roles } from '@/common/decorators';
+import { UserRole } from '@/common/enums';
 
 @ApiTags('Employees')
+@ApiBearerAuth('access-token')
 @Controller('employees')
+@UseGuards(JwtAuthGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 

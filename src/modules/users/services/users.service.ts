@@ -6,7 +6,11 @@ import { Repository } from 'typeorm';
 import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
 import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
 import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
+import { AssignUserDto } from '@/modules/users/dto/user/assign-user.dto';
 import { User } from '../../users/entities/user.entity';
+import { Company } from '@/modules/company/entities/company.entity';
+import { Shop } from '@/modules/shops/entities/shops.entity';
+import { Warehouse } from '@/modules/warehouse/entities/warehouse.entity';
 import { UserRole, UserStatus } from '@/common/enums';
 import { PaginationDto } from '@/common/dto';
 
@@ -15,6 +19,12 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(Warehouse)
+    private readonly warehouseRepository: Repository<Warehouse>,
   ) {}
 
   async findAll(pagination?: PaginationDto): Promise<{ users: User[]; total: number }> {
@@ -42,6 +52,20 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
+  }
+
+  async findByEmailWithAssociations(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ 
+      where: { email },
+      relations: ['company', 'shop', 'warehouse']
+    });
+  }
+
+  async findByIdWithAssociations(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({ 
+      where: { id },
+      relations: ['company', 'shop', 'warehouse']
+    });
   }
 
   async findMe(user: User): Promise<User> {
@@ -122,5 +146,86 @@ export class UsersService {
     ]);
 
     return { total, active, inactive, admins, users };
+  }
+
+  async assignUser(userId: string, assignDto: AssignUserDto, currentUser: User): Promise<User> {
+    // Only super admin can assign company admins, company admins can assign within their company
+    if (assignDto.role === UserRole.COMPANY_ADMIN && currentUser.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only super admin can assign company admins');
+    }
+
+    if (currentUser.role === UserRole.COMPANY_ADMIN && assignDto.companyId !== currentUser.company?.id) {
+      throw new ForbiddenException('Company admin can only assign users within their company');
+    }
+
+    const user = await this.findById(userId);
+    const updateData: Partial<User> = {};
+
+    if (assignDto.companyId) {
+      const company = await this.companyRepository.findOne({ where: { id: assignDto.companyId } });
+      if (!company) throw new NotFoundException('Company not found');
+      updateData.company = company;
+    }
+
+    if (assignDto.shopId) {
+      const shop = await this.shopRepository.findOne({ where: { id: assignDto.shopId } });
+      if (!shop) throw new NotFoundException('Shop not found');
+      updateData.shop = shop;
+    }
+
+    if (assignDto.warehouseId) {
+      const warehouse = await this.warehouseRepository.findOne({ where: { id: assignDto.warehouseId } });
+      if (!warehouse) throw new NotFoundException('Warehouse not found');
+      updateData.warehouse = warehouse;
+    }
+
+    if (assignDto.role) {
+      updateData.role = assignDto.role;
+    }
+
+    await this.usersRepository.update(userId, updateData);
+    return this.findByIdWithAssociations(userId);
+  }
+
+  async getCompanyUsers(companyId: string, currentUser: User): Promise<User[]> {
+    if (currentUser.role !== UserRole.SUPER_ADMIN && currentUser.company?.id !== companyId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return this.usersRepository.find({
+      where: { company: { id: companyId } },
+      relations: ['company', 'shop', 'warehouse'],
+      select: ['id', 'email', 'firstName', 'lastName', 'role', 'status', 'createdAt']
+    });
+  }
+
+  async getShopUsers(shopId: string, currentUser: User): Promise<User[]> {
+    const shop = await this.shopRepository.findOne({ where: { id: shopId }, relations: ['company'] });
+    if (!shop) throw new NotFoundException('Shop not found');
+
+    if (currentUser.role !== UserRole.SUPER_ADMIN && currentUser.company?.id !== shop.company.id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return this.usersRepository.find({
+      where: { shop: { id: shopId } },
+      relations: ['company', 'shop', 'warehouse'],
+      select: ['id', 'email', 'firstName', 'lastName', 'role', 'status', 'createdAt']
+    });
+  }
+
+  async getWarehouseUsers(warehouseId: string, currentUser: User): Promise<User[]> {
+    const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId }, relations: ['company'] });
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+
+    if (currentUser.role !== UserRole.SUPER_ADMIN && currentUser.company?.id !== warehouse.company.id) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return this.usersRepository.find({
+      where: { warehouse: { id: warehouseId } },
+      relations: ['company', 'shop', 'warehouse'],
+      select: ['id', 'email', 'firstName', 'lastName', 'role', 'status', 'createdAt']
+    });
   }
 }

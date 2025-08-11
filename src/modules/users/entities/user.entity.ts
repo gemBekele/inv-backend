@@ -1,4 +1,4 @@
-import { Entity, Column, Index, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
+import { Entity, Column, Index, BeforeInsert, BeforeUpdate, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude } from 'class-transformer';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +7,7 @@ import { UserRole, UserStatus } from '../../../common/enums';
 import { Employee } from './employee.entity';
 import { Shop } from '../../shops/entities/shops.entity';
 import { Warehouse } from '../../warehouse/entities/warehouse.entity';
+import { Company } from '../../company/entities/company.entity';
 
 @Entity('users')
 @Index(['email'], { unique: true })
@@ -67,6 +68,21 @@ export class User extends BaseEntity {
 
   @OneToMany(() => Warehouse, warehouse => warehouse.manager)
   warehouses: Warehouse[];
+
+  @ApiPropertyOptional({ description: 'Associated company ID' })
+  @ManyToOne(() => Company, { nullable: true })
+  @JoinColumn({ name: 'companyId' })
+  company?: Company;
+
+  @ApiPropertyOptional({ description: 'Associated shop ID' })
+  @ManyToOne(() => Shop, { nullable: true })
+  @JoinColumn({ name: 'shopId' })
+  shop?: Shop;
+
+  @ApiPropertyOptional({ description: 'Associated warehouse ID' })
+  @ManyToOne(() => Warehouse, { nullable: true })
+  @JoinColumn({ name: 'warehouseId' })
+  warehouse?: Warehouse;
 
   @BeforeInsert()
   @BeforeUpdate()

@@ -49,7 +49,7 @@ export class AdminSeeder {
         password: hashedPassword,
         firstName: adminFirstName || 'Admin',
         lastName: adminLastName || 'User',
-        role: UserRole.ADMIN,
+        role: UserRole.SUPER_ADMIN,
         status: UserStatus.ACTIVE,
         isEmailVerified: true,
       });

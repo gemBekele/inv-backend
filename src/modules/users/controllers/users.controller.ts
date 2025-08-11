@@ -8,11 +8,13 @@ import {
   Delete,
   UseGuards,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { UsersService } from '@/modules/users/services/users.service';
 import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
 import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
 import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
+import { AssignUserDto } from '@/modules/users/dto/user/assign-user.dto';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@/common/decorators';
@@ -106,5 +108,54 @@ export class UsersController {
   @ApiOperation({ summary: 'Delete user (Admin only)' })
   remove(@Param('id') id: string, @CurrentUser() admin: User) {
     return this.usersService.remove(id, admin);
+  }
+
+  @Post('admin/:id/assign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Assign user to company/shop/warehouse' })
+  @ApiResponse({ status: 200, description: 'User assigned successfully' })
+  async assignUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() assignDto: AssignUserDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.assignUser(id, assignDto, currentUser);
+  }
+
+  @Get('company/:companyId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Get users in a company' })
+  @ApiResponse({ status: 200, description: 'Company users retrieved successfully' })
+  async getCompanyUsers(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getCompanyUsers(companyId, currentUser);
+  }
+
+  @Get('shop/:shopId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get users in a shop' })
+  @ApiResponse({ status: 200, description: 'Shop users retrieved successfully' })
+  async getShopUsers(
+    @Param('shopId', ParseUUIDPipe) shopId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getShopUsers(shopId, currentUser);
+  }
+
+  @Get('warehouse/:warehouseId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get users in a warehouse' })
+  @ApiResponse({ status: 200, description: 'Warehouse users retrieved successfully' })
+  async getWarehouseUsers(
+    @Param('warehouseId', ParseUUIDPipe) warehouseId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getWarehouseUsers(warehouseId, currentUser);
   }
 }

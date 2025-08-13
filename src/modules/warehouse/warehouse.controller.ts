@@ -20,7 +20,7 @@ import {
   ApiBody,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/common/guards';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { Roles } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
 import { WarehouseService } from './warehouse.service';
@@ -37,7 +37,7 @@ import { PaginatedResult } from '@/common/interfaces';
 @ApiTags('Warehouses')
 @ApiBearerAuth('access-token')
 @Controller('warehouses')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WarehouseController {
   constructor(private readonly warehouseService: WarehouseService) {}
 
@@ -144,6 +144,7 @@ export class WarehouseController {
   }
 
   @Post(':id/products')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Attach a product to a warehouse' })
   @ApiBody({ type: AttachProductDto })
@@ -158,6 +159,7 @@ export class WarehouseController {
   }
 
   @Delete(':id/products/:productId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Detach a product from a warehouse' })
   @ApiResponse({ status: 204, description: 'Product detached from warehouse' })

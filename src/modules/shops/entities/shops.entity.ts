@@ -4,6 +4,7 @@ import { Warehouse } from '../../warehouse/entities/warehouse.entity';
 import { Company } from '../../company/entities/company.entity';
 import { Sales } from '../../sales/entities/sales.entity';
 import { Employee } from '../../users/entities/employee.entity';
+import { ShopProduct } from './shop-product.entity';
 
 @Entity('shops')
 export class Shop extends BaseEntity {
@@ -24,4 +25,7 @@ export class Shop extends BaseEntity {
 
   @OneToMany(() => Sales, sale => sale.shop)
   sales: Sales[];
+
+  @OneToMany(() => ShopProduct, shopProduct => shopProduct.shop)
+  products: ShopProduct[];
 }

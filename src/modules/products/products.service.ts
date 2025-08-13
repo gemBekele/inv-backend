@@ -9,12 +9,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, Like, Between } from 'typeorm';
 import * as XLSX from 'xlsx';
 import { Product } from './entities/product.entity';
+import { WarehouseProduct } from '../warehouse/entities/warehouse-product.entity';
+import { ShopProduct } from '../shops/entities/shop-product.entity';
 import { 
   CreateProductDto, 
   UpdateProductDto, 
   ProductQueryDto,
   ProductResponseDto
 } from './dto';
+import { ProductLocationDto } from './dto/product-location.dto';
 import { ProductType, ProductStatus } from './enums';
 import { PaginatedResult } from '../../common/interfaces';
 import { CACHE_KEYS } from '../../common/constants';
@@ -27,6 +30,10 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(WarehouseProduct)
+    private readonly warehouseProductRepository: Repository<WarehouseProduct>,
+    @InjectRepository(ShopProduct)
+    private readonly shopProductRepository: Repository<ShopProduct>,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -79,11 +86,15 @@ export class ProductsService {
       JSON.stringify(query)
     );
     
-    // Try to get from cache
-    const cached = await this.cacheService.get<PaginatedResult<ProductResponseDto>>(cacheKey);
-    if (cached) {
-      this.logger.debug(`Cache hit for products list: ${cacheKey}`);
-      return cached;
+    // Try to get from cache with error handling
+    try {
+      const cached = await this.cacheService.get<PaginatedResult<ProductResponseDto>>(cacheKey);
+      if (cached) {
+        this.logger.debug(`Cache hit for products list`);
+        return cached;
+      }
+    } catch (error) {
+      this.logger.warn('Cache get failed, proceeding with database query:', error.message);
     }
 
     const queryBuilder = this.createQueryBuilder();
@@ -108,8 +119,12 @@ export class ProductsService {
       totalPages: Math.ceil(total / limit)
     };
 
-    // Cache the result for 5 minutes
-    await this.cacheService.set(cacheKey, result, 300000);
+    // Cache the result with error handling
+    try {
+      await this.cacheService.set(cacheKey, result, 300000);
+    } catch (error) {
+      this.logger.warn('Cache set failed:', error.message);
+    }
 
     return result;
   }
@@ -343,6 +358,44 @@ export class ProductsService {
     await this.cacheService.set(cacheKey, categories, 1800000);
 
     return categories;
+  }
+
+  /**
+   * Get product locations in warehouses and shops
+   */
+  async getProductLocations(productId: string): Promise<ProductLocationDto> {
+    const product = await this.productRepository.findOne({ where: { id: productId } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    const [warehouseProducts, shopProducts] = await Promise.all([
+      this.warehouseProductRepository.find({
+        where: { product: { id: productId } },
+        relations: ['warehouse']
+      }),
+      this.shopProductRepository.find({
+        where: { product: { id: productId } },
+        relations: ['shop']
+      })
+    ]);
+
+    return {
+      warehouses: warehouseProducts.map(wp => ({
+        id: wp.warehouse.id,
+        name: wp.warehouse.name,
+        location: wp.warehouse.location || '',
+        stockQuantity: wp.stockQuantity,
+        minStockLevel: wp.minStockLevel
+      })),
+      shops: shopProducts.map(sp => ({
+        id: sp.shop.id,
+        name: sp.shop.name,
+        location: sp.shop.location || '',
+        stockQuantity: sp.stockQuantity,
+        minStockLevel: sp.minStockLevel
+      }))
+    };
   }
 
   /**

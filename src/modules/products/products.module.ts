@@ -4,12 +4,14 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
 import { Product } from './entities/product.entity';
+import { WarehouseProduct } from '../warehouse/entities/warehouse-product.entity';
+import { ShopProduct } from '../shops/entities/shop-product.entity';
 import { CacheService } from '@/shared/cache/cache.service';
 import { RedisCacheModule } from '@/shared/cache/cache.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product]),
+    TypeOrmModule.forFeature([Product, WarehouseProduct, ShopProduct]),
     RedisCacheModule,
     MulterModule.register({
       limits: {

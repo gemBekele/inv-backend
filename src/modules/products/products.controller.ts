@@ -31,6 +31,7 @@ import {
   ProductResponseDto,
   BarcodeScanDto
 } from './dto';
+import { ProductLocationDto } from './dto/product-location.dto';
 import { JwtAuthGuard } from '../../common/guards';
 import { Roles } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
@@ -162,6 +163,23 @@ export class ProductsController {
       success: true,
       message: `Bulk import completed. ${result.success} products imported successfully`,
       data: result
+    };
+  }
+
+  @Get(':id/locations')
+  @ApiOperation({ summary: 'Get product locations in warehouses and shops' })
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product locations retrieved successfully',
+    type: ProductLocationDto
+  })
+  async getProductLocations(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto<ProductLocationDto>> {
+    const locations = await this.productsService.getProductLocations(id);
+    return {
+      success: true,
+      message: 'Product locations retrieved successfully',
+      data: locations
     };
   }
 

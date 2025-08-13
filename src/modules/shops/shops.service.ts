@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Shop } from '../shops/entities/shops.entity';
+import { ShopProduct } from '../shops/entities/shop-product.entity';
+import { Product } from '../products/entities/product.entity';
 import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto } from './dto';
+import { AttachProductDto } from './dto/attach-product.dto';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
 import { Company } from '../company/entities/company.entity';
 import { PaginatedResult } from '../../common/interfaces';
@@ -16,6 +19,10 @@ export class ShopsService {
   constructor(
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(ShopProduct)
+    private readonly shopProductRepository: Repository<ShopProduct>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
     @InjectRepository(Warehouse)
     private readonly warehouseRepository: Repository<Warehouse>,
     @InjectRepository(Company)
@@ -116,6 +123,41 @@ export class ShopsService {
       createdAt: shop.createdAt,
       updatedAt: shop.updatedAt,
     };
+  }
+
+  async attachProduct(shopId: string, attachProductDto: AttachProductDto): Promise<void> {
+    const { productId } = attachProductDto;
+    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+    const product = await this.productRepository.findOne({ where: { id: productId } });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    const existing = await this.shopProductRepository.findOne({
+      where: { shop: { id: shopId }, product: { id: productId } },
+    });
+    if (existing) {
+      throw new ConflictException('Product already attached to shop');
+    }
+    const shopProduct = this.shopProductRepository.create({
+      shop,
+      product,
+      stockQuantity: attachProductDto.stockQuantity,
+      minStockLevel: attachProductDto.minStockLevel,
+    });
+    await this.shopProductRepository.save(shopProduct);
+  }
+
+  async detachProduct(shopId: string, productId: string): Promise<void> {
+    const result = await this.shopProductRepository.delete({
+      shop: { id: shopId },
+      product: { id: productId },
+    });
+    if (result.affected === 0) {
+      throw new NotFoundException('Product not found in shop');
+    }
   }
 
   private async invalidateShopCache(): Promise<void> {

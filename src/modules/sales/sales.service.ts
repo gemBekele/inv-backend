@@ -19,6 +19,8 @@ import { PaymentType, SaleStatus, TransactionType, DiscountType } from './enums'
 import { CommissionService } from '../commission/commission.service';
 import { Employee } from '../users/entities/employee.entity';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
+import { WarehouseProduct } from '../warehouse/entities/warehouse-product.entity';
+import { ShopProduct } from '../shops/entities/shop-product.entity';
 
 @Injectable()
 export class SalesService {
@@ -45,26 +47,59 @@ export class SalesService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Employee)
     private readonly employeeRepository: Repository<Employee>,
+    @InjectRepository(WarehouseProduct)
+    private readonly warehouseProductRepository: Repository<WarehouseProduct>,
+    @InjectRepository(ShopProduct)
+    private readonly shopProductRepository: Repository<ShopProduct>,
     private readonly cacheService: CacheService,
     private readonly commissionService: CommissionService,
   ) {}
 
-  async create(createSaleDto: CreateSaleDto): Promise<SaleResponseDto> {
-    const { customerId, warehouseId, items, paymentType, saleDate, note, createdBy } = createSaleDto;
+  async create(createSaleDto: CreateSaleDto, currentUser?: User): Promise<SaleResponseDto> {
+    const { customerId, items, paymentType, saleDate, note } = createSaleDto;
+    
+    // Find customer
     const customer = await this.customerRepository.findOne({ where: { id: customerId } });
     if (!customer) throw new NotFoundException('Customer not found');
-    const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
-    if (!warehouse) throw new NotFoundException('Warehouse not found');
-    const employee = await this.employeeRepository.findOne({ where: { user: { id: createdBy } } });
-    if (!employee) throw new NotFoundException('Employee not found for the sales creator');
+
+    // Get employee record for the current user (for commission calculation)
+    const employee = await this.employeeRepository.findOne({ 
+      where: { user: { id: currentUser?.id } },
+      relations: ['company', 'shop', 'warehouse', 'user']
+    });
+    
+    if (!employee) {
+      throw new NotFoundException('Employee record not found for current user');
+    }
+
+    // Auto-determine warehouse and shop from employee assignment
+    let warehouse = employee.warehouse;
+    let shop = employee.shop;
+
+    // If no warehouse/shop from employee, try from createSaleDto
+    if (!warehouse && createSaleDto.warehouseId) {
+      warehouse = await this.warehouseRepository.findOne({ where: { id: createSaleDto.warehouseId } });
+      if (!warehouse) throw new NotFoundException('Warehouse not found');
+    }
+
+    if (!shop && createSaleDto.shopId) {
+      shop = await this.shopRepository.findOne({ where: { id: createSaleDto.shopId } });
+      if (!shop) throw new NotFoundException('Shop not found');
+    }
+
+    // Default to employee's primary warehouse if still not found
+    if (!warehouse) {
+      throw new NotFoundException('No warehouse assigned to employee or provided in request');
+    }
 
     const sales = this.salesRepository.create({
       customer,
       warehouse,
+      shop,
       paymentType,
       saleDate: saleDate || new Date(),
       note,
-      createdBy: { id: createdBy } as User,
+      createdBy: currentUser,
     });
 
     let totalAmount = 0;
@@ -73,6 +108,7 @@ export class SalesService {
     let subtotal = 0;
     const saleItems: SaleItem[] = [];
 
+    // Process sale items and calculate totals
     for (const itemDto of items) {
       const product = await this.productRepository.findOne({ where: { id: itemDto.productId } });
       if (!product) throw new NotFoundException(`Product ${itemDto.productId} not found`);
@@ -88,18 +124,17 @@ export class SalesService {
         taxAmount: (product.price * itemDto.quantity * product.taxRate) / 100,
       });
 
-      // Apply discount if any (assuming discount logic is handled here or passed in itemDto)
-      // For now, let's assume no item-specific discount and use a general discount later if needed.
-      saleItem.discountAmount = 0; // Placeholder for now
-
+      saleItem.discountAmount = 0; // Default for now
+      
       subtotal += saleItem.subtotal;
       taxAmount += saleItem.taxAmount;
-      discountAmount += saleItem.discountAmount; // This will be 0 for now
+      discountAmount += saleItem.discountAmount;
       totalAmount += saleItem.total;
 
       saleItems.push(saleItem);
     }
 
+    // Set calculated totals
     sales.items = saleItems;
     sales.totalAmount = totalAmount;
     sales.taxAmount = taxAmount;
@@ -108,12 +143,17 @@ export class SalesService {
     sales.remainingBalance = totalAmount - (sales.advancePayment || 0);
 
     const savedSale = await this.salesRepository.save(sales);
-    await this.saleItemRepository.save(saleItems); // Save sale items after sales entity
+    await this.saleItemRepository.save(saleItems);
 
-    // Calculate and create commissions for each product in the sale
+    // Update inventory levels for each sale item
+    await this.updateInventoryOnSale(saleItems, warehouse, shop);
+
+    // Auto-calculate and create commissions for each product
     for (const saleItem of saleItems) {
       const product = saleItem.product;
-      const commissionRate = product.commissionRate;
+      
+      // Use product-specific commission rate, fallback to employee base rate
+      const commissionRate = product.commissionRate || employee.baseCommissionRate;
       const commissionAmount = (saleItem.total * commissionRate) / 100;
 
       if (commissionAmount > 0) {
@@ -128,7 +168,7 @@ export class SalesService {
     }
     
     // Log creation
-    await this.createAuditLog(savedSale, createdBy, AuditAction.CREATE);
+    await this.createAuditLog(savedSale, currentUser?.id || 'system', AuditAction.CREATE);
 
     await this.invalidateSaleCache();
     return this.mapToResponseDto(savedSale);
@@ -419,5 +459,177 @@ export class SalesService {
     } catch (error) {
       this.logger.warn('Failed to invalidate sale cache:', error);
     }
+  }
+
+  /**
+   * Update inventory levels when a sale is made
+   */
+  private async updateInventoryOnSale(saleItems: SaleItem[], warehouse: Warehouse, shop?: Shop): Promise<void> {
+    for (const saleItem of saleItems) {
+      const product = saleItem.product;
+      const quantitySold = saleItem.quantity;
+
+      // Update warehouse inventory
+      if (warehouse) {
+        const warehouseProduct = await this.warehouseProductRepository.findOne({
+          where: { warehouse: { id: warehouse.id }, product: { id: product.id } }
+        });
+
+        if (warehouseProduct) {
+          warehouseProduct.stockQuantity = Math.max(0, warehouseProduct.stockQuantity - quantitySold);
+          await this.warehouseProductRepository.save(warehouseProduct);
+        }
+      }
+
+      // Update shop inventory if sale is from shop
+      if (shop) {
+        const shopProduct = await this.shopProductRepository.findOne({
+          where: { shop: { id: shop.id }, product: { id: product.id } }
+        });
+
+        if (shopProduct) {
+          shopProduct.stockQuantity = Math.max(0, shopProduct.stockQuantity - quantitySold);
+          await this.shopProductRepository.save(shopProduct);
+        }
+      }
+
+      // Update main product stock quantity
+      product.stockQuantity = Math.max(0, product.stockQuantity - quantitySold);
+      await this.productRepository.save(product);
+    }
+  }
+
+  /**
+   * Get real-time inventory levels for a product at a specific location
+   */
+  async getInventoryLevels(productId: string, locationId: string, locationType: 'warehouse' | 'shop'): Promise<any> {
+    const product = await this.productRepository.findOne({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Product not found');
+
+    let locationStock = 0;
+    let locationName = '';
+
+    if (locationType === 'warehouse') {
+      const warehouseProduct = await this.warehouseProductRepository.findOne({
+        where: { warehouse: { id: locationId }, product: { id: productId } },
+        relations: ['warehouse']
+      });
+      
+      if (warehouseProduct) {
+        locationStock = warehouseProduct.stockQuantity;
+        locationName = warehouseProduct.warehouse.name;
+      }
+    } else if (locationType === 'shop') {
+      const shopProduct = await this.shopProductRepository.findOne({
+        where: { shop: { id: locationId }, product: { id: productId } },
+        relations: ['shop']
+      });
+      
+      if (shopProduct) {
+        locationStock = shopProduct.stockQuantity;
+        locationName = shopProduct.shop.name;
+      }
+    }
+
+    return {
+      productId: product.id,
+      productName: product.name,
+      totalStock: product.stockQuantity,
+      locationId,
+      locationType,
+      locationName,
+      locationStock,
+      minStockLevel: product.minStockLevel,
+      isLowStock: locationStock <= product.minStockLevel,
+      lastUpdated: new Date()
+    };
+  }
+
+  async findCustomerByPhone(phone: string): Promise<any> {
+    // Check if it's a customer
+    const customer = await this.customerRepository.findOne({ 
+      where: { phoneNumber: phone },
+      select: ['id', 'name', 'phoneNumber', 'address']
+    });
+    
+    if (customer) {
+      return {
+        type: 'customer',
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phoneNumber,
+        address: customer.address
+      };
+    }
+
+    // Check if it's a user
+    const user = await this.userRepository.findOne({ 
+      where: { phone },
+      select: ['id', 'firstName', 'lastName', 'email', 'phone']
+    });
+    
+    if (user) {
+      return {
+        type: 'user',
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        phone: user.phone
+      };
+    }
+
+    throw new NotFoundException('Customer or user not found with this phone number');
+  }
+
+  async getUserInfo(userId: string): Promise<any> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['company', 'shop', 'warehouse'],
+      select: ['id', 'firstName', 'lastName', 'role', 'email', 'phone']
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const employee = await this.employeeRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['shop', 'warehouse']
+    });
+
+    return {
+      user: {
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        email: user.email,
+        phone: user.phone
+      },
+      company: user.company ? {
+        id: user.company.id,
+        name: user.company.name
+      } : null,
+      shop: user.shop ? {
+        id: user.shop.id,
+        name: user.shop.name,
+        location: user.shop.location
+      } : null,
+      warehouse: user.warehouse ? {
+        id: user.warehouse.id,
+        name: user.warehouse.name,
+        location: user.warehouse.location
+      } : null,
+      employee: employee ? {
+        id: employee.id,
+        shop: employee.shop ? {
+          id: employee.shop.id,
+          name: employee.shop.name
+        } : null,
+        warehouse: employee.warehouse ? {
+          id: employee.warehouse.id,
+          name: employee.warehouse.name
+        } : null
+      } : null
+    };
   }
 }

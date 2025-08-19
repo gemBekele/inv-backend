@@ -22,6 +22,8 @@ import { ProductType, ProductStatus } from './enums';
 import { PaginatedResult } from '../../common/interfaces';
 import { CACHE_KEYS } from '../../common/constants';
 import { CacheService } from '@/shared/cache/cache.service';
+import { User } from '@/modules/users/entities/user.entity';
+import { UserRole } from '@/common/enums';
 
 @Injectable()
 export class ProductsService {
@@ -40,7 +42,7 @@ export class ProductsService {
   /**
    * Create a new product
    */
-  async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
+  async create(createProductDto: CreateProductDto, userId?: string): Promise<ProductResponseDto> {
     // Check for duplicate SKU
     if (createProductDto.sku) {
       const existingProduct = await this.productRepository.findOne({
@@ -69,7 +71,55 @@ export class ProductsService {
     }
 
     const product = this.productRepository.create(createProductDto);
+    if (userId) {
+      product.createdBy = { id: userId } as any;
+    }
+
     const savedProduct = await this.productRepository.save(product);
+
+    // Assign to warehouses if specified
+    if (createProductDto.warehouseIds && createProductDto.warehouseIds.length > 0) {
+      for (const warehouseId of createProductDto.warehouseIds) {
+        try {
+          const warehouse = await this.warehouseProductRepository.manager.findOne('warehouses', { 
+            where: { id: warehouseId } 
+          });
+          if (warehouse) {
+            const warehouseProduct = this.warehouseProductRepository.create({
+              warehouse: { id: warehouseId },
+              product: savedProduct,
+              stockQuantity: createProductDto.stockQuantity || 0,
+              minStockLevel: createProductDto.minStockLevel || 0
+            });
+            await this.warehouseProductRepository.save(warehouseProduct);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to assign product to warehouse ${warehouseId}:`, error.message);
+        }
+      }
+    }
+
+    // Assign to shops if specified
+    if (createProductDto.shopIds && createProductDto.shopIds.length > 0) {
+      for (const shopId of createProductDto.shopIds) {
+        try {
+          const shop = await this.shopProductRepository.manager.findOne('shops', { 
+            where: { id: shopId } 
+          });
+          if (shop) {
+            const shopProduct = this.shopProductRepository.create({
+              shop: { id: shopId },
+              product: savedProduct,
+              stockQuantity: createProductDto.stockQuantity || 0,
+              minStockLevel: createProductDto.minStockLevel || 0
+            });
+            await this.shopProductRepository.save(shopProduct);
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to assign product to shop ${shopId}:`, error.message);
+        }
+      }
+    }
 
     // Clear cache
     await this.invalidateProductCache();
@@ -282,25 +332,15 @@ export class ProductsService {
    * Get expired products
    */
   async getExpiredProducts(): Promise<ProductResponseDto[]> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.PRODUCTS_LIST, 'expired');
-    
-    const cached = await this.cacheService.get<ProductResponseDto[]>(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
+    const now = new Date();
     const products = await this.productRepository
       .createQueryBuilder('product')
-      .where('product.expiryDate < :now', { now: new Date() })
+      .where('product.expiryDate IS NOT NULL')
+      .andWhere('product.expiryDate < :now', { now })
       .andWhere('product.status = :status', { status: ProductStatus.AVAILABLE })
       .getMany();
 
-    const result = products.map(product => this.mapToResponseDto(product));
-    
-    // Cache for 5 minutes
-    await this.cacheService.set(cacheKey, result, 300000);
-
-    return result;
+    return products.map(product => this.mapToResponseDto(product));
   }
 
   /**
@@ -395,6 +435,187 @@ export class ProductsService {
         stockQuantity: sp.stockQuantity,
         minStockLevel: sp.minStockLevel
       }))
+    };
+  }
+
+  /**
+   * Get products created by a specific user
+   */
+  async getProductsByUser(userId: string, query: ProductQueryDto): Promise<PaginatedResult<ProductResponseDto>> {
+    const queryBuilder = this.createQueryBuilder();
+    
+    // Filter by created user
+    queryBuilder.where('product.createdBy = :userId', { userId });
+    
+    // Apply other filters
+    this.applyFilters(queryBuilder, query);
+
+    // Apply pagination
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    
+    queryBuilder.skip(skip).take(limit);
+
+    // Execute query
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    const result: PaginatedResult<ProductResponseDto> = {
+      data: products.map(product => this.mapToResponseDto(product)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
+
+    return result;
+  }
+
+  /**
+   * Get products based on user's assigned location (warehouse/shop)
+   */
+  async getProductsByUserLocation(user: User, query: ProductQueryDto): Promise<PaginatedResult<ProductResponseDto>> {
+    // Get products from user's assigned warehouse and shop
+    const warehouseProducts = user.warehouse ? 
+      await this.warehouseProductRepository.find({
+        where: { warehouse: { id: user.warehouse.id } },
+        relations: ['product']
+      }) : [];
+
+    const shopProducts = user.shop ? 
+      await this.shopProductRepository.find({
+        where: { shop: { id: user.shop.id } },
+        relations: ['product']
+      }) : [];
+
+    // Combine product IDs
+    const productIds = [
+      ...warehouseProducts.map(wp => wp.product.id),
+      ...shopProducts.map(sp => sp.product.id)
+    ];
+
+    if (productIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page: query.page || 1,
+        limit: query.limit || 10,
+        totalPages: 0
+      };
+    }
+
+    // Query products with location context
+    const queryBuilder = this.createQueryBuilder();
+    queryBuilder.where('product.id IN (:...productIds)', { productIds });
+    
+    // Apply other filters
+    this.applyFilters(queryBuilder, query);
+
+    // Apply pagination
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    
+    queryBuilder.skip(skip).take(limit);
+
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data: products.map(product => this.mapToResponseDto(product)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
+  }
+
+  /**
+   * Get products in a specific warehouse
+   */
+  async getWarehouseProducts(warehouseId: string, query: ProductQueryDto, user: User): Promise<PaginatedResult<ProductResponseDto>> {
+    // Authorization check
+    if (user.role === UserRole.COMPANY_ADMIN && (!user.warehouse || user.warehouse.id !== warehouseId)) {
+      throw new NotFoundException('Access denied to this warehouse');
+    }
+
+    const warehouseProducts = await this.warehouseProductRepository.find({
+      where: { warehouse: { id: warehouseId } },
+      relations: ['product']
+    });
+
+    const productIds = warehouseProducts.map(wp => wp.product.id);
+
+    if (productIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page: query.page || 1,
+        limit: query.limit || 10,
+        totalPages: 0
+      };
+    }
+
+    const queryBuilder = this.createQueryBuilder();
+    queryBuilder.where('product.id IN (:...productIds)', { productIds });
+    
+    this.applyFilters(queryBuilder, query);
+
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data: products.map(product => this.mapToResponseDto(product)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
+  }
+
+  /**
+   * Get products in a specific shop
+   */
+  async getShopProducts(shopId: string, query: ProductQueryDto, user: User): Promise<PaginatedResult<ProductResponseDto>> {
+    // Authorization check
+    if (user.role === UserRole.COMPANY_ADMIN && (!user.shop || user.shop.id !== shopId)) {
+      throw new NotFoundException('Access denied to this shop');
+    }
+
+    const shopProducts = await this.shopProductRepository.find({
+      where: { shop: { id: shopId } },
+      relations: ['product']
+    });
+
+    const productIds = shopProducts.map(sp => sp.product.id);
+
+    if (productIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page: query.page || 1,
+        limit: query.limit || 10,
+        totalPages: 0
+      };
+    }
+
+    const queryBuilder = this.createQueryBuilder();
+    queryBuilder.where('product.id IN (:...productIds)', { productIds });
+    
+    this.applyFilters(queryBuilder, query);
+
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    const [products, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data: products.map(product => this.mapToResponseDto(product)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     };
   }
 
@@ -509,7 +730,9 @@ export class ProductsService {
       taxRate: product.taxRate,
       trackStock: product.trackStock,
       profitMargin: product.profitMargin,
-      isExpired: product.isExpired,
+      isExpired: product.calculatedIsExpired,
+      stockQuantity: product.stockQuantity,
+      minStockLevel: product.minStockLevel,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt
     };

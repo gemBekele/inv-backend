@@ -5,6 +5,7 @@ import { Company } from '../../company/entities/company.entity';
 import { Sales } from '../../sales/entities/sales.entity';
 import { Employee } from '../../users/entities/employee.entity';
 import { ShopProduct } from './shop-product.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('shops')
 export class Shop extends BaseEntity {
@@ -28,4 +29,7 @@ export class Shop extends BaseEntity {
 
   @OneToMany(() => ShopProduct, shopProduct => shopProduct.shop)
   products: ShopProduct[];
+
+  @ManyToOne(() => User, { nullable: true })
+  owner?: User;
 }

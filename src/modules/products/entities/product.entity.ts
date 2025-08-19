@@ -1,9 +1,10 @@
-import { Column, Entity, Index, BeforeInsert, BeforeUpdate, JoinTable, ManyToMany, OneToMany } from 'typeorm';
+import { Column, Entity, Index, BeforeInsert, BeforeUpdate, JoinTable, ManyToMany, OneToMany, ManyToOne } from 'typeorm';
 import { BaseEntity } from '../../../database/entities/base.entity';
 import { ProductType } from '../enums/product-type.enum';
 import { ProductStatus } from '../enums/product-status.enum';
 import { WarehouseProduct } from '../..//warehouse/entities/warehouse-product.entity';
 import { Commission } from '../../commission/entities/commission.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Entity('products')
 @Index(['sku'], { unique: true })
@@ -57,6 +58,15 @@ export class Product extends BaseEntity {
   @Column({ type: 'boolean', default: true })
   trackStock: boolean;
 
+  @Column({ type: 'int', default: 0 })
+  stockQuantity: number;
+
+  @Column({ type: 'int', default: 0 })
+  minStockLevel: number;
+
+  @ManyToOne(() => User, { nullable: true })
+  createdBy?: User;
+
    @OneToMany(() => WarehouseProduct, warehouseProduct => warehouseProduct.product)
   warehouseProducts: WarehouseProduct[];
 
@@ -91,9 +101,12 @@ export class Product extends BaseEntity {
   }
 
 
-  // Check if product is expired
-  get isExpired(): boolean {
+  get calculatedIsExpired(): boolean {
     if (!this.expiryDate) return false;
-    return new Date() > this.expiryDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(this.expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    return today > expiry;
   }
 }

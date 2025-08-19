@@ -38,6 +38,9 @@ export class AuthService {
     const { email, password } = loginDto;
     const user = await this.validateUser(email, password);
     
+    // Get employee information
+    const employee = await this.usersService.findEmployeeByUserId(user.id);
+    
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -46,7 +49,8 @@ export class AuthService {
       lastName: user.lastName,
       companyId: user.company?.id,
       shopId: user.shop?.id,
-      warehouseId: user.warehouse?.id
+      warehouseId: user.warehouse?.id,
+      employeeId: employee?.id
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -129,6 +133,8 @@ export class AuthService {
       }
 
       const userWithAssociations = await this.usersService.findByIdWithAssociations(user.id);
+      const employee = await this.usersService.findEmployeeByUserId(user.id);
+      
       const newPayload = { 
         sub: user.id, 
         email: user.email, 
@@ -137,7 +143,8 @@ export class AuthService {
         lastName: user.lastName,
         companyId: userWithAssociations.company?.id,
         shopId: userWithAssociations.shop?.id,
-        warehouseId: userWithAssociations.warehouse?.id
+        warehouseId: userWithAssociations.warehouse?.id,
+        employeeId: employee?.id
       };
 
       return {

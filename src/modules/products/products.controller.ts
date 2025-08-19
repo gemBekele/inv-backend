@@ -33,11 +33,12 @@ import {
 } from './dto';
 import { ProductLocationDto } from './dto/product-location.dto';
 import { JwtAuthGuard } from '../../common/guards';
-import { Roles } from '../../common/decorators';
+import { Roles, CurrentUser } from '../../common/decorators';
 import { RolesGuard } from '../../common/guards';
 import { UserRole } from '../../common/enums';
 import { ResponseDto } from '../../common/dto';
 import { PaginatedResult } from '@/common/interfaces';
+import { User } from '../users/entities/user.entity';
 
 @ApiTags('Products')
 @ApiBearerAuth('access-token')
@@ -57,8 +58,11 @@ export class ProductsController {
     status: HttpStatus.CONFLICT,
     description: 'Product with SKU or barcode already exists'
   })
-  async create(@Body() createProductDto: CreateProductDto): Promise<ResponseDto<ProductResponseDto>> {
-    const product = await this.productsService.create(createProductDto);
+  async create(
+    @Body() createProductDto: CreateProductDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.create(createProductDto, user.id);
     return {
       success: true,
       message: 'Product created successfully',
@@ -77,6 +81,80 @@ export class ProductsController {
     return {
       success: true,
       message: 'Products retrieved successfully',
+      data: result
+    };
+  }
+
+  @Get('my-products')
+  @ApiOperation({ summary: 'Get products created by current user' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'User products retrieved successfully'
+  })
+  async getMyProducts(
+    @Query() query: ProductQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.getProductsByUser(user.id, query);
+    return {
+      success: true,
+      message: 'User products retrieved successfully',
+      data: result
+    };
+  }
+
+  @Get('by-location')
+  @ApiOperation({ summary: 'Get products by warehouse/shop location from user context' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Location products retrieved successfully'
+  })
+  async getProductsByLocation(
+    @Query() query: ProductQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.getProductsByUserLocation(user, query);
+    return {
+      success: true,
+      message: 'Location products retrieved successfully',
+      data: result
+    };
+  }
+
+  @Get('warehouse/:warehouseId')
+  @ApiOperation({ summary: 'Get products in specific warehouse' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Warehouse products retrieved successfully'
+  })
+  async getWarehouseProducts(
+    @Param('warehouseId', ParseUUIDPipe) warehouseId: string,
+    @Query() query: ProductQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.getWarehouseProducts(warehouseId, query, user);
+    return {
+      success: true,
+      message: 'Warehouse products retrieved successfully',
+      data: result
+    };
+  }
+
+  @Get('shop/:shopId')
+  @ApiOperation({ summary: 'Get products in specific shop' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Shop products retrieved successfully'
+  })
+  async getShopProducts(
+    @Param('shopId', ParseUUIDPipe) shopId: string,
+    @Query() query: ProductQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.getShopProducts(shopId, query, user);
+    return {
+      success: true,
+      message: 'Shop products retrieved successfully',
       data: result
     };
   }

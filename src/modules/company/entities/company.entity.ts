@@ -1,7 +1,9 @@
 import { BaseEntity } from '../../../database/entities/base.entity';
 import { Warehouse } from '../../warehouse/entities/warehouse.entity';
+import { Shop } from '../../shops/entities/shops.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Employee } from '../../users/entities/employee.entity';
 
 @Entity('companies')
 export class Company extends BaseEntity {
@@ -22,4 +24,13 @@ export class Company extends BaseEntity {
 
   @OneToMany(() => Warehouse, warehouse => warehouse.company, {eager: true})
   warehouses: Warehouse[];
+
+  @OneToMany(() => Shop, shop => shop.company, {eager: true})
+  shops: Shop[];
+
+  @OneToMany(() => User, user => user.company)
+  users: User[];
+
+  @OneToMany(() => Employee, employee => employee.company)
+  employees: Employee[];
 }

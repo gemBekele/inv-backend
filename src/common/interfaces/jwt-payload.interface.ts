@@ -7,6 +7,7 @@ export interface JwtPayload {
   companyId?: string;
   shopId?: string;
   warehouseId?: string;
+  employeeId?: string;
   iat?: number;
   exp?: number;
 }

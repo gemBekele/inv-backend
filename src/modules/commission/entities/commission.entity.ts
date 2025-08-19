@@ -27,4 +27,13 @@ export class Commission extends BaseEntity {
 
   @ManyToOne(() => Employee, employee => employee.commissions)
   employee: Employee;
+
+  @Column({ type: 'boolean', default: false })
+  isApproved: boolean;
+
+  @Column({ type: 'uuid', nullable: true })
+  approvedBy?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt?: Date;
 }

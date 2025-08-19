@@ -20,7 +20,22 @@ export class CompanyResponseDto {
   description?: string;
 
   @ApiProperty({ description: 'Warehouses associated with the company' })
-  warehouses?: string[];
+  warehouses?: { id: string; name: string }[];
+
+  @ApiProperty({ description: 'Shops associated with the company' })
+  shops?: { id: string; name: string }[];
+
+  @ApiProperty({ description: 'Employees associated with the company' })
+  employees?: {
+    id: string;
+    name: string;
+    phoneNumber: string;
+    jobTitle?: string;
+    baseCommissionRate?: number;
+    userId?: string;
+    userName?: string;
+    userEmail?: string;
+  }[];
 
   @ApiProperty({ description: 'Creation date' })
   createdAt: Date;

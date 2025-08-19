@@ -54,3 +54,12 @@ export class AddWarehouseDto {
   @IsUUID('all', { each: true })
   warehouseIds: string[];
 }
+
+export class AddShopDto {
+  @ApiProperty({ description: 'List of Shop IDs to add' })
+  @IsString({ each: true })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('all', { each: true })
+  shopIds: string[];
+}

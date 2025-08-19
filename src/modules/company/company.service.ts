@@ -5,6 +5,7 @@ import { Company } from './entities/company.entity';
 import { CreateCompanyDto, UpdateCompanyDto, CompanyQueryDto, CompanyResponseDto } from './dto';
 import { PaginatedResult } from '../../common/interfaces';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
+import { Shop } from '../shops/entities/shops.entity';
 
 @Injectable()
 export class CompanyService {
@@ -13,6 +14,8 @@ export class CompanyService {
     private readonly companyRepository: Repository<Company>,
 	@InjectRepository(Warehouse)
 	private readonly warehouseRepository: Repository<Warehouse>,
+	@InjectRepository(Shop)
+	private readonly shopRepository: Repository<Shop>,
   ) {}
 
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyResponseDto> {
@@ -51,7 +54,10 @@ export class CompanyService {
   async findAll(query: CompanyQueryDto): Promise<PaginatedResult<CompanyResponseDto>> {
     const { search } = query;
     const queryBuilder = this.companyRepository.createQueryBuilder('company')
-      .leftJoinAndSelect('company.warehouses', 'warehouses');
+      .leftJoinAndSelect('company.warehouses', 'warehouses')
+      .leftJoinAndSelect('company.shops', 'shops')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user');
     if (search) {
       queryBuilder.where('company.name LIKE :search OR company.address LIKE :search', { search: `%${search}%` });
     }
@@ -71,7 +77,7 @@ export class CompanyService {
   async findOne(id: string): Promise<CompanyResponseDto> {
     const company = await this.companyRepository.findOne({ 
       where: { id }, 
-      relations: ['warehouses'] 
+      relations: ['warehouses', 'shops', 'employees', 'employees.user', 'users'] 
     });
     if (!company) throw new NotFoundException('Company not found');
     return this.mapToResponseDto(company);
@@ -113,6 +119,29 @@ export class CompanyService {
 	return this.mapToResponseDto(company);
   }
 
+  async addShops(companyId: string, shopIds: string[]): Promise<CompanyResponseDto> {
+    const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
+    if (!company) throw new NotFoundException('Company not found');
+
+    const shops = await this.shopRepository.findBy({ id: In(shopIds) });
+    if (!shops || shops.length === 0) throw new NotFoundException('Shop not found');
+
+    for (const shop of shops) {
+      shop.company = company;
+      await this.shopRepository.save(shop);
+    }
+    
+    // Optionally reload company with updated shops
+    const updatedCompany = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
+    return this.mapToResponseDto(updatedCompany);
+  }
+
+  async getShops(companyId: string): Promise<CompanyResponseDto> {
+    const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
+    if (!company) throw new NotFoundException('Company not found');
+    return this.mapToResponseDto(company);
+  }
+
   private mapToResponseDto(company: Company): CompanyResponseDto {
     return {
       id: company.id,
@@ -121,7 +150,23 @@ export class CompanyService {
       phoneNumber: company.phoneNumber,
       email: company.email,
       description: company.description,
-	  warehouses: company.warehouses ? company.warehouses.map(warehouse => warehouse.id) : [],
+	    warehouses: company.warehouses ? company.warehouses.map(warehouse => ({
+        id: warehouse.id,
+        name: warehouse.name })) : [],
+	    shops: company.shops ? company.shops.map(shop => ({
+        id: shop.id,
+        name: shop.name
+      })) : [],
+      employees: company.employees ? company.employees.map(employee => ({
+        id: employee.id,
+        name: employee.name,
+        phoneNumber: employee.phoneNumber,
+        jobTitle: employee.jobTitle,
+        baseCommissionRate: employee.baseCommissionRate,
+        userId: employee.user?.id,
+        userName: employee.user ? `${employee.user.firstName} ${employee.user.lastName}` : null,
+        userEmail: employee.user?.email,
+      })) : [],
       createdAt: company.createdAt,
       updatedAt: company.updatedAt,
     };

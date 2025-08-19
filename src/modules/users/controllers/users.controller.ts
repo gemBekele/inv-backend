@@ -53,6 +53,57 @@ export class UsersController {
 
   // --- ADMIN ENDPOINTS ---
 
+  @Post('admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Create a new user with optional auto-assignment (Super Admin and Company Admin only)' })
+  @ApiResponse({ status: 201, description: 'User created successfully' })
+  @ApiResponse({ status: 409, description: 'User with email already exists' })
+  @ApiResponse({ status: 403, description: 'Company Admin can only create users within their company' })
+  async createUser(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.create(createUserDto, currentUser);
+  }
+
+  @Post('admin/bulk-assign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Bulk assign multiple users to company/shop/warehouse' })
+  @ApiResponse({ status: 200, description: 'Users assigned successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied' })
+  async bulkAssignUsers(
+    @Body() body: { userIds: string[], assignmentData: AssignUserDto },
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.bulkAssignUsers(body.userIds, body.assignmentData, currentUser);
+  }
+
+  @Get('admin/activity/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Get user activity log' })
+  @ApiResponse({ status: 200, description: 'Activity log retrieved' })
+  async getUserActivityLog(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getUserActivityLog(userId, currentUser);
+  }
+
+  @Get('admin/company-stats/:companyId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
+  @ApiOperation({ summary: 'Get comprehensive user statistics by company' })
+  @ApiResponse({ status: 200, description: 'Company user statistics retrieved' })
+  async getCompanyUserStats(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.getCompanyUserStats(companyId, currentUser);
+  }
+
   @Get('admin/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)

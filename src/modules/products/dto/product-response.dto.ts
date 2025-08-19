@@ -57,6 +57,12 @@ export class ProductResponseDto {
   @ApiProperty()
   isExpired: boolean;
 
+  @ApiProperty({ description: 'Current stock quantity' })
+  stockQuantity: number;
+
+  @ApiProperty({ description: 'Minimum stock level' })
+  minStockLevel: number;
+
   @ApiProperty()
   createdAt: Date;
 

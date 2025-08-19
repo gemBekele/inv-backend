@@ -278,8 +278,11 @@ async findProductOfWarehouse(warehouseId: string, productId: string): Promise<Wa
       taxRate: product.taxRate,
       trackStock: product.trackStock,
       imageUrl: product.imageUrl,
-	  profitMargin: product.profitMargin,
-	  isExpired: product.isExpired,
+      profitMargin: product.profitMargin,
+      isExpired: product.calculatedIsExpired,
+      expiryDate: product.expiryDate,
+      stockQuantity: product.stockQuantity,
+      minStockLevel: product.minStockLevel,
     };
   }
 }

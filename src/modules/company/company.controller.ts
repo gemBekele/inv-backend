@@ -28,6 +28,7 @@ import {
   CompanyQueryDto,
   CompanyResponseDto,
   AddWarehouseDto,
+  AddShopDto,
 } from './dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { JwtAuthGuard } from '@/common/guards';
@@ -85,6 +86,39 @@ export class CompanyController {
     @Param('id', ParseUUIDPipe) companyId: string,
   ): Promise<CompanyResponseDto> {
     return this.companyService.getWarehouses(companyId);
+  }
+
+  @Post(':id/shops')
+  @ApiOperation({ summary: 'Associate shops with a company' })
+  @ApiParam({ name: 'id', description: 'Company ID', type: String })
+  @ApiBody({
+    type: AddShopDto,
+    description: 'List of shop IDs to associate with the company',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Shops associated',
+    type: CompanyResponseDto,
+  })
+  async addShops(
+    @Param('id', ParseUUIDPipe) companyId: string,
+    @Body() addShopsDto: AddShopDto
+  ): Promise<CompanyResponseDto> {
+    return this.companyService.addShops(companyId, addShopsDto.shopIds);
+  }
+
+  @Get(':id/shops')
+  @ApiOperation({ summary: 'Get shops associated with a company' })
+  @ApiParam({ name: 'id', description: 'Company ID', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'List of shops',
+    type: CompanyResponseDto,
+  })
+  async getShops(
+    @Param('id', ParseUUIDPipe) companyId: string,
+  ): Promise<CompanyResponseDto> {
+    return this.companyService.getShops(companyId);
   }
 
   @Get()

@@ -3,6 +3,7 @@ import { BaseEntity } from '../../../database/entities/base.entity';
 import { User } from './user.entity';
 import { Shop } from '../../shops/entities/shops.entity';
 import { Warehouse } from '../../warehouse/entities/warehouse.entity';
+import { Company } from '../../company/entities/company.entity';
 import { Commission } from '../../commission/entities/commission.entity';
 
 @Entity('employees')
@@ -21,6 +22,9 @@ export class Employee extends BaseEntity {
 
   @ManyToOne(() => User, user => user.employees)
   user: User;
+
+  @ManyToOne(() => Company, company => company.employees)
+  company: Company;
 
   @ManyToOne(() => Shop, shop => shop.employees)
   shop: Shop;

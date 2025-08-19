@@ -179,4 +179,18 @@ export class CreateProductDto {
   @IsBoolean()
   @Transform(({ value }) => value === 'true' || value === true)
   trackStock?: boolean;
+
+  @ApiPropertyOptional({ 
+    description: 'Warehouse IDs to assign this product to',
+    example: ['warehouse-uuid-1', 'warehouse-uuid-2']
+  })
+  @IsOptional()
+  warehouseIds?: string[];
+
+  @ApiPropertyOptional({ 
+    description: 'Shop IDs to assign this product to',
+    example: ['shop-uuid-1', 'shop-uuid-2']
+  })
+  @IsOptional()
+  shopIds?: string[];
 }

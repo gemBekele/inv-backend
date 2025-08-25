@@ -3,24 +3,28 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } 
 import { EmployeeService } from '../services/employee.service';
 import { CreateEmployeeDto, UpdateEmployeeDto, EmployeeQueryDto, EmployeeResponseDto } from '../dto/employee';
 import { PaginatedResult } from '@/common/interfaces';
-import { JwtAuthGuard } from '@/common/guards';
-import { Roles } from '@/common/decorators';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
+import { Roles, CurrentUser } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
 
 @ApiTags('Employees')
 @ApiBearerAuth('access-token')
 @Controller('employees')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN)
   @ApiOperation({ summary: 'Create a new employee' })
   @ApiBody({ type: CreateEmployeeDto })
   @ApiResponse({ status: 201, description: 'Employee created successfully', type: EmployeeResponseDto })
-  async create(@Body() createEmployeeDto: CreateEmployeeDto): Promise<EmployeeResponseDto> {
-    return this.employeeService.create(createEmployeeDto);
+  async create(
+    @Body() createEmployeeDto: CreateEmployeeDto,
+    @CurrentUser() currentUser: any
+  ): Promise<EmployeeResponseDto> {
+    return this.employeeService.create(createEmployeeDto, currentUser);
   }
 
   @Get()

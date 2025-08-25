@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, 
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './dto';
+import { QuickSaleDto } from './dto/quick-sale.dto';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { SaleStatus } from './enums';
@@ -24,9 +25,20 @@ export class SalesController {
   @ApiResponse({ status: 201, description: 'Sale created successfully', type: SaleResponseDto })
   async create(
     @Body() createSaleDto: CreateSaleDto,
-    @CurrentUser() user: User
+    @CurrentUser() currentUser: any
   ): Promise<SaleResponseDto> {
-    return this.salesService.create(createSaleDto, user);
+    // Auto-set createdBy from current user
+    createSaleDto.createdBy = currentUser.id;
+    
+    // Auto-set warehouse/shop from JWT if not provided
+    if (!createSaleDto.warehouseId && currentUser.warehouseId) {
+      createSaleDto.warehouseId = currentUser.warehouseId;
+    }
+    if (!createSaleDto.shopId && currentUser.shopId) {
+      createSaleDto.shopId = currentUser.shopId;
+    }
+    
+    return this.salesService.create(createSaleDto, currentUser);
   }
 
   @Get()
@@ -155,15 +167,11 @@ export class SalesController {
   @Post('quick-sale')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a sale using phone number lookup and JWT token info' })
+  @ApiBody({ type: QuickSaleDto })
   @ApiResponse({ status: 201, description: 'Sale created successfully' })
   async createQuickSale(
-    @Body() saleData: {
-      customerPhone: string;
-      items: Array<{ productId: string; quantity: number }>;
-      paymentType: string;
-      note?: string;
-    },
-    @CurrentUser() currentUser: any // Use any to access JWT payload properties
+    @Body() saleData: QuickSaleDto,
+    @CurrentUser() currentUser: any
   ) {
     // 1. Find customer by phone number
     const customer = await this.salesService.findCustomerByPhone(saleData.customerPhone);
@@ -195,7 +203,7 @@ export class SalesController {
       saleDate: new Date()
     };
     
-    const sale = await this.salesService.create(createSaleDto);
+    const sale = await this.salesService.create(createSaleDto, currentUser);
     
     return {
       success: true,

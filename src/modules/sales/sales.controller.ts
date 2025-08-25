@@ -4,6 +4,14 @@ import { SalesService } from './sales.service';
 import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './dto';
 import { QuickSaleDto } from './dto/quick-sale.dto';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
+import { 
+  UpdateSaleStatusDto, 
+  ProcessSaleReturnDto, 
+  GetInventoryLevelsQueryDto,
+  DailySalesReportQueryDto,
+  MonthlySalesReportQueryDto,
+  FindCustomerByPhoneQueryDto
+} from './dto/sales-actions.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { SaleStatus } from './enums';
 import { JwtAuthGuard } from '@/common/guards';
@@ -95,7 +103,7 @@ export class SalesController {
   @ApiResponse({ status: 404, description: 'Sale not found' })
   async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() statusDto: { status: SaleStatus; userId: string }
+    @Body() statusDto: UpdateSaleStatusDto
   ): Promise<SaleResponseDto> {
     return this.salesService.updateStatus(id, statusDto.status, statusDto.userId);
   }
@@ -107,7 +115,7 @@ export class SalesController {
   @ApiResponse({ status: 404, description: 'Sale not found' })
   async processSaleReturn(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() returnDto: { reason: string; userId: string }
+    @Body() returnDto: ProcessSaleReturnDto
   ): Promise<SaleResponseDto> {
     return this.salesService.processSaleReturn(id, returnDto.reason, returnDto.userId);
   }
@@ -122,28 +130,24 @@ export class SalesController {
 
   @Get('reports/daily')
   @ApiOperation({ summary: 'Get daily sales report' })
-  @ApiQuery({ name: 'date', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Daily sales report' })
-  async getDailySalesReport(@Query('date') date?: string) {
-    return this.salesService.getDailySalesReport(date);
+  async getDailySalesReport(@Query() query: DailySalesReportQueryDto) {
+    return this.salesService.getDailySalesReport(query.date);
   }
 
   @Get('reports/monthly')
   @ApiOperation({ summary: 'Get monthly sales report' })
-  @ApiQuery({ name: 'year', required: false, type: Number })
-  @ApiQuery({ name: 'month', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Monthly sales report' })
-  async getMonthlySalesReport(@Query('year') year?: number, @Query('month') month?: number) {
-    return this.salesService.getMonthlySalesReport(year, month);
+  async getMonthlySalesReport(@Query() query: MonthlySalesReportQueryDto) {
+    return this.salesService.getMonthlySalesReport(query.year, query.month);
   }
 
   @Get('search/customer-by-phone')
   @ApiOperation({ summary: 'Find customer by phone number for sales' })
-  @ApiQuery({ name: 'phone', type: String, description: 'Customer phone number' })
   @ApiResponse({ status: 200, description: 'Customer found' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
-  async findCustomerByPhone(@Query('phone') phone: string) {
-    return this.salesService.findCustomerByPhone(phone);
+  async findCustomerByPhone(@Query() query: FindCustomerByPhoneQueryDto) {
+    return this.salesService.findCustomerByPhone(query.phone);
   }
 
   @Get('user-info')
@@ -159,9 +163,9 @@ export class SalesController {
   async getInventoryLevels(
     @Param('productId', ParseUUIDPipe) productId: string,
     @Param('locationId', ParseUUIDPipe) locationId: string,
-    @Query('type') locationType: 'warehouse' | 'shop'
+    @Query() query: GetInventoryLevelsQueryDto
   ) {
-    return this.salesService.getInventoryLevels(productId, locationId, locationType);
+    return this.salesService.getInventoryLevels(productId, locationId, query.type);
   }
 
   @Post('quick-sale')

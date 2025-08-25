@@ -18,6 +18,8 @@ import { SalesModule } from '@/modules/sales/sales.module';
 import { CommissionModule } from '@/modules/commission/commission.module';
 import { CollectionsModule } from '@/modules/collections/collections.module';
 import { SettingsModule } from '@/modules/settings/settings.module';
+import { PurchaseModule } from '@/modules/purchase/purchase.module';
+import { ExpensesModule } from '@/modules/expenses/expenses.module';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { SettingsModule } from '@/modules/settings/settings.module';
     CommissionModule,
     CollectionsModule,
     SettingsModule,
+    PurchaseModule,
+    ExpensesModule,
   ],
   providers: [
     {

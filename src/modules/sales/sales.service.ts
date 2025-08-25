@@ -55,7 +55,7 @@ export class SalesService {
     private readonly commissionService: CommissionService,
   ) {}
 
-  async create(createSaleDto: CreateSaleDto, currentUser?: User): Promise<SaleResponseDto> {
+  async create(createSaleDto: CreateSaleDto, currentUser?: any): Promise<SaleResponseDto> {
     const { customerId, items, paymentType, saleDate, note } = createSaleDto;
     
     // Find customer
@@ -64,7 +64,7 @@ export class SalesService {
 
     // Get employee record for the current user (for commission calculation)
     const employee = await this.employeeRepository.findOne({ 
-      where: { user: { id: currentUser?.id } },
+      where: { user: { id: currentUser?.id || createSaleDto.createdBy } },
       relations: ['company', 'shop', 'warehouse', 'user']
     });
     
@@ -99,7 +99,7 @@ export class SalesService {
       paymentType,
       saleDate: saleDate || new Date(),
       note,
-      createdBy: currentUser,
+      createdBy: currentUser ? { id: currentUser.id } as User : null,
     });
 
     let totalAmount = 0;

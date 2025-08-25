@@ -24,11 +24,18 @@ export class CreateEmployeeDto {
   @IsString()
   userId: string;
 
-  @ApiProperty({ description: 'Shop ID' })
+  @ApiPropertyOptional({ description: 'Company ID' })
   @IsString()
-  shopId: string;
+  @IsOptional()
+  companyId?: string;
 
-  @ApiProperty({ description: 'Warehouse ID' })
+  @ApiPropertyOptional({ description: 'Shop ID' })
   @IsString()
-  warehouseId: string;
+  @IsOptional()
+  shopId?: string;
+
+  @ApiPropertyOptional({ description: 'Warehouse ID' })
+  @IsString()
+  @IsOptional()
+  warehouseId?: string;
 }

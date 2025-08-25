@@ -6,6 +6,7 @@ import { CreateEmployeeDto, UpdateEmployeeDto, EmployeeQueryDto, EmployeeRespons
 import { User } from '../entities/user.entity';
 import { Shop } from '../../shops/entities/shops.entity';
 import { Warehouse } from '../../warehouse/entities/warehouse.entity';
+import { Company } from '../../company/entities/company.entity';
 import { CacheService } from '@/shared/cache/cache.service';
 import { PaginatedResult } from '@/common/interfaces';
 import { CACHE_KEYS } from '@/common/constants';
@@ -23,17 +24,37 @@ export class EmployeeService {
     private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Warehouse)
     private readonly warehouseRepository: Repository<Warehouse>,
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
     private readonly cacheService: CacheService,
   ) {}
 
-  async create(createEmployeeDto: CreateEmployeeDto): Promise<EmployeeResponseDto> {
-    const { userId, shopId, warehouseId, name, phoneNumber, baseCommissionRate, jobTitle } = createEmployeeDto;
+  async create(createEmployeeDto: CreateEmployeeDto, currentUser?: any): Promise<EmployeeResponseDto> {
+    const { userId, shopId, warehouseId, companyId, name, phoneNumber, baseCommissionRate, jobTitle } = createEmployeeDto;
+    
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
-    const shop = await this.shopRepository.findOne({ where: { id: shopId } });
-    if (!shop) throw new NotFoundException('Shop not found');
-    const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
-    if (!warehouse) throw new NotFoundException('Warehouse not found');
+    
+    // Auto-assign company from current user if company admin
+    let company = null;
+    if (companyId) {
+      company = await this.companyRepository.findOne({ where: { id: companyId } });
+      if (!company) throw new NotFoundException('Company not found');
+    } else if (currentUser?.companyId) {
+      company = await this.companyRepository.findOne({ where: { id: currentUser.companyId } });
+    }
+    
+    let shop = null;
+    if (shopId) {
+      shop = await this.shopRepository.findOne({ where: { id: shopId } });
+      if (!shop) throw new NotFoundException('Shop not found');
+    }
+    
+    let warehouse = null;
+    if (warehouseId) {
+      warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
+      if (!warehouse) throw new NotFoundException('Warehouse not found');
+    }
 
     const employee = this.employeeRepository.create({
       name,
@@ -41,9 +62,11 @@ export class EmployeeService {
       baseCommissionRate: baseCommissionRate || 0,
       jobTitle,
       user,
+      company,
       shop,
       warehouse,
     });
+    
     const savedEmployee = await this.employeeRepository.save(employee);
     await this.invalidateEmployeeCache();
     return this.mapToResponseDto(savedEmployee);
@@ -107,29 +130,29 @@ export class EmployeeService {
 
   private createQueryBuilder(): SelectQueryBuilder<Employee> {
     return this.employeeRepository.createQueryBuilder('employee')
-      .leftJoin('employee.user', 'user')
-      .leftJoin('employee.shop', 'shop')
-      .leftJoin('employee.warehouse', 'warehouse')
-      .select(['employee', 'user.username', 'shop.name', 'warehouse.name']);
+      .leftJoinAndSelect('employee.user', 'user')
+      .leftJoinAndSelect('employee.shop', 'shop')
+      .leftJoinAndSelect('employee.warehouse', 'warehouse');
   }
 
   private applyFilters(queryBuilder: SelectQueryBuilder<Employee>, query: EmployeeQueryDto): void {
     if (query.search) {
-      queryBuilder.andWhere('employee.name ILIKE :search OR user.username ILIKE :search OR shop.name ILIKE :search', { search: `%${query.search}%` });
+      queryBuilder.andWhere('employee.name ILIKE :search OR user.fullName ILIKE :search OR shop.name ILIKE :search', { search: `%${query.search}%` });
     }
     queryBuilder.orderBy('employee.createdAt', 'DESC');
   }
 
   private mapToResponseDto(employee: Employee): EmployeeResponseDto {
+    console.log('Mapping employee to response DTO:', employee);
     return {
       id: employee.id,
       name: employee.name,
       phoneNumber: employee.phoneNumber,
       baseCommissionRate: employee.baseCommissionRate,
       jobTitle: employee.jobTitle,
-      userFullName: employee.user.fullName,
-      shopName: employee.shop.name,
-      warehouseName: employee.warehouse.name,
+      userFullName: employee.name,
+      shopName: employee.shop?.name,
+      warehouseName: employee.warehouse?.name || '',
       createdAt: employee.createdAt,
       updatedAt: employee.updatedAt,
     };

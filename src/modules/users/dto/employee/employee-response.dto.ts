@@ -16,7 +16,7 @@ export class EmployeeResponseDto {
   @ApiProperty({ description: 'Job title' })
   jobTitle?: string;
 
-  @ApiProperty({ description: 'User username' })
+  @ApiProperty({ description: 'User FullName' })
   userFullName: string;
 
   @ApiProperty({ description: 'Shop name' })

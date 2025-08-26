@@ -19,6 +19,20 @@ import {
 import { ExpenseApprovalLevel } from '../enums';
 
 export class ExpenseQueryDto {
+  @ApiPropertyOptional({ description: 'Page number for pagination', example: 1 })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  page?: number = 1;
+  
+  @ApiPropertyOptional({ description: 'Number of items per page for pagination', example: 10 })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  limit?: number = 10;
+
   @ApiPropertyOptional({ description: 'Filter by status', enum: ExpenseStatus })
   @IsOptional()
   @IsEnum(ExpenseStatus)

@@ -13,6 +13,7 @@ import {
   ExpenseApprovalLevel 
 } from './enums';
 import { ApprovalStatus } from './entities/expense-approval.entity';
+import { ExpenseQueryDto } from './dto';
 
 @Injectable()
 export class ExpensesService {
@@ -133,7 +134,7 @@ export class ExpensesService {
   }
 
   async findAll(
-    paginationDto: PaginationDto,
+    paginationDto: ExpenseQueryDto,
     filters?: {
       status?: ExpenseStatus[];
       type?: ExpenseType[];

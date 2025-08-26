@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '@/common/guards';
+import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { CurrentUser } from '@/common/decorators';
 import { PaginationDto } from '@/common/dto';
 import { ExpensesService } from './expenses.service';
@@ -16,9 +16,9 @@ import {
 } from './dto';
 
 @ApiTags('Expenses')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('access-token')
 @Controller('expenses')
+@UseGuards(JwtAuthGuard)
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 
@@ -32,17 +32,32 @@ export class ExpensesController {
   @Get()
   @ApiOperation({ summary: 'Get all expenses with pagination and filters' })
   @ApiResponse({ status: 200, description: 'Expenses retrieved successfully' })
-  async findAll(@Query() paginationDto: PaginationDto, @Query() filters: ExpenseQueryDto) {
+  async findAll(@Query() query: ExpenseQueryDto) {
+    console.log("Query received in controller:", query);
+    
+    // Extract pagination
+    const paginationDto = {
+      page: query.page || 1,
+      limit: query.limit || 10
+    };
+    
     // Convert single enum values to arrays for service compatibility
     const serviceFilters = {
-      status: filters.status ? [filters.status] : undefined,
-      type: filters.type ? [filters.type] : undefined,
-      category: filters.category ? [filters.category] : undefined,
-      submittedBy: filters.submittedBy,
-      startDate: filters.startDate,
-      endDate: filters.endDate,
+      status: query.status ? [query.status] : undefined,
+      type: query.type ? [query.type] : undefined,
+      category: query.category ? [query.category] : undefined,
+      submittedBy: query.submittedBy,
+      startDate: query.startDate,
+      endDate: query.endDate,
     };
     return this.expensesService.findAll(paginationDto, serviceFilters);
+  }
+
+  @Get('dashboard/stats')
+  @ApiOperation({ summary: 'Get expense dashboard statistics' })
+  @ApiResponse({ status: 200, description: 'Dashboard statistics retrieved successfully' })
+  async getDashboardStats(@Query() filters: ExpenseDashboardStatsFiltersDto) {
+    return this.expensesService.getDashboardStats(filters);
   }
 
   @Get(':id')
@@ -104,12 +119,5 @@ export class ExpensesController {
   @ApiResponse({ status: 201, description: 'Attachment added successfully' })
   async addAttachment(@Param('id') expenseId: string, @Body() attachmentData: AddExpenseAttachmentDto) {
     return this.expensesService.addAttachment(expenseId, attachmentData);
-  }
-
-  @Get('dashboard/stats')
-  @ApiOperation({ summary: 'Get expense dashboard statistics' })
-  @ApiResponse({ status: 200, description: 'Dashboard statistics retrieved successfully' })
-  async getDashboardStats(@Query() filters: ExpenseDashboardStatsFiltersDto) {
-    return this.expensesService.getDashboardStats(filters);
   }
 }

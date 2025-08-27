@@ -1,30 +1,71 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsEnum, IsString, IsDate, IsBoolean, IsUUID } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsString,
+  IsDate,
+  IsBoolean,
+  IsUUID,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { 
-  PurchaseOrderStatus, 
-  ApprovalStatus, 
+import {
+  PurchaseOrderStatus,
+  ApprovalStatus,
   PurchaseType,
-  PurchasePaymentStatus 
+  PurchasePaymentStatus,
 } from '../enums/purchase.enums';
 
 export class PurchaseOrderQueryDto {
-  @ApiPropertyOptional({ description: 'Filter by status', enum: PurchaseOrderStatus })
+  @ApiPropertyOptional({
+    description: 'Page number for pagination',
+    example: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page for pagination',
+    example: 10,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @Min(1)
+  limit?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'Filter by status',
+    enum: PurchaseOrderStatus,
+  })
   @IsOptional()
   @IsEnum(PurchaseOrderStatus)
   status?: PurchaseOrderStatus;
 
-  @ApiPropertyOptional({ description: 'Filter by approval status', enum: ApprovalStatus })
+  @ApiPropertyOptional({
+    description: 'Filter by approval status',
+    enum: ApprovalStatus,
+  })
   @IsOptional()
   @IsEnum(ApprovalStatus)
   approvalStatus?: ApprovalStatus;
 
-  @ApiPropertyOptional({ description: 'Filter by payment status', enum: PurchasePaymentStatus })
+  @ApiPropertyOptional({
+    description: 'Filter by payment status',
+    enum: PurchasePaymentStatus,
+  })
   @IsOptional()
   @IsEnum(PurchasePaymentStatus)
   paymentStatus?: PurchasePaymentStatus;
 
-  @ApiPropertyOptional({ description: 'Filter by purchase type', enum: PurchaseType })
+  @ApiPropertyOptional({
+    description: 'Filter by purchase type',
+    enum: PurchaseType,
+  })
   @IsOptional()
   @IsEnum(PurchaseType)
   purchaseType?: PurchaseType;
@@ -88,7 +129,9 @@ export class PurchaseOrderQueryDto {
   @IsBoolean()
   isOverdue?: boolean;
 
-  @ApiPropertyOptional({ description: 'Search term (PO number, supplier name, etc.)' })
+  @ApiPropertyOptional({
+    description: 'Search term (PO number, supplier name, etc.)',
+  })
   @IsOptional()
   @IsString()
   search?: string;

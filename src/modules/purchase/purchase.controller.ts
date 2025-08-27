@@ -16,9 +16,9 @@ import {
 } from './dto';
 
 @ApiTags('Purchase')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('access-token')
 @Controller('purchase')
+@UseGuards(JwtAuthGuard)
 export class PurchaseController {
   constructor(private readonly purchaseService: PurchaseService) {}
 
@@ -32,7 +32,11 @@ export class PurchaseController {
   @Get('orders')
   @ApiOperation({ summary: 'Get all purchase orders with pagination and filters' })
   @ApiResponse({ status: 200, description: 'Purchase orders retrieved successfully' })
-  async findAll(@Query() paginationDto: PaginationDto, @Query() filters: PurchaseOrderQueryDto) {
+  async findAll(@Query() filters: PurchaseOrderQueryDto) {
+    const paginationDto = {
+      page: filters.page || 1,
+      limit: filters.limit || 10
+    };
     // Convert single enum values to arrays for service compatibility
     const serviceFilters = {
       status: filters.status ? [filters.status] : undefined,

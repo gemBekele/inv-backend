@@ -14,6 +14,7 @@ import {
   PurchasePaymentStatus,
   ReceivingStatus 
 } from './enums';
+import { PurchaseOrderQueryDto } from './dto';
 
 @Injectable()
 export class PurchaseService {
@@ -53,7 +54,7 @@ export class PurchaseService {
   }
 
   async findAll(
-    paginationDto: PaginationDto,
+    paginationDto: PurchaseOrderQueryDto,
     filters?: {
       status?: PurchaseOrderStatus[];
       supplierId?: string;

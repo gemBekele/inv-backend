@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, Patch, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
-import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './dto';
+import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto, EmployeeCreateSaleDto, EmployeeCreateSaleResponseDto } from './dto';
 import { QuickSaleDto } from './dto/quick-sale.dto';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
 import { 
@@ -14,7 +14,7 @@ import {
 } from './dto/sales-actions.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { SaleStatus } from './enums';
-import { JwtAuthGuard } from '@/common/guards';
+import { JwtAuthGuard, EmployeeGuard } from '@/common/guards';
 import { Roles, CurrentUser } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
 import { User } from '../users/entities/user.entity';
@@ -166,6 +166,92 @@ export class SalesController {
     @Query() query: GetInventoryLevelsQueryDto
   ) {
     return this.salesService.getInventoryLevels(productId, locationId, query.type);
+  }
+
+  @Post('employee/create-sale')
+  @UseGuards(JwtAuthGuard, EmployeeGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ 
+    summary: 'Employee creates a new sale',
+    description: 'Allows authenticated employees to create sales using their assigned warehouse/shop and automatically calculate commissions'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Sale created successfully by employee',
+    type: EmployeeCreateSaleResponseDto
+  })
+  @ApiResponse({ status: 401, description: 'Employee authentication required' })
+  @ApiResponse({ status: 403, description: 'Employee access required' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation errors or missing warehouse assignment' })
+  @ApiResponse({ status: 404, description: 'Customer not found with provided phone number' })
+  async employeeCreateSale(
+    @Body() employeeCreateSaleDto: EmployeeCreateSaleDto,
+    @CurrentUser() currentUser: any
+  ): Promise<EmployeeCreateSaleResponseDto> {
+    // 1. Find customer by phone number
+    const customer = await this.salesService.findCustomerByPhone(employeeCreateSaleDto.customerPhone);
+    
+    // 2. Get detailed employee info first to check warehouse assignment
+    const userInfo = await this.salesService.getUserInfo(currentUser.id);
+    
+    if (!userInfo.employee) {
+      throw new BadRequestException('User is not registered as an employee');
+    }
+    
+    // 3. Get warehouse/shop from getUserInfo which now includes fallback logic
+    const employeeId = userInfo.employee.id;
+    const warehouseId = userInfo.warehouse?.id || userInfo.employee.warehouse?.id || currentUser.warehouseId;
+    const shopId = userInfo.shop?.id || userInfo.employee.shop?.id || currentUser.shopId;
+    
+    if (!warehouseId) {
+      throw new BadRequestException('Employee must be assigned to a warehouse to create sales');
+    }
+    
+    // 4. Create the sale with employee context
+    const createSaleDto: CreateSaleDto = {
+      customerId: customer.id,
+      warehouseId: warehouseId,
+      shopId: shopId,
+      items: employeeCreateSaleDto.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity
+      })),
+      paymentType: employeeCreateSaleDto.paymentType,
+      note: `${employeeCreateSaleDto.note || ''} [Created by Employee: ${userInfo.user.name}]`,
+      createdBy: currentUser.id,
+      saleDate: new Date()
+    };
+    
+    const sale = await this.salesService.create(createSaleDto, currentUser);
+    
+    // 5. Get commission information that was auto-calculated
+    const commissionInfo = await this.salesService.getEmployeeSaleCommissions(sale.id, employeeId);
+    
+    return {
+      success: true,
+      message: 'Sale created successfully by employee with auto-calculated commissions',
+      data: {
+        sale,
+        customer,
+        employee: userInfo.employee,
+        commissions: commissionInfo,
+        warehouse: userInfo.warehouse,
+        shop: userInfo.shop,
+        employeeContext: {
+          userId: currentUser.id,
+          employeeId: currentUser.employeeId,
+          warehouseId: currentUser.warehouseId,
+          shopId: currentUser.shopId,
+          companyId: currentUser.companyId,
+          role: currentUser.role,
+          permissions: {
+            canCreateSales: true,
+            canViewCommissions: true,
+            canProcessPayments: true
+          }
+        }
+      }
+    };
   }
 
   @Post('quick-sale')

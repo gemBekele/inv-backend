@@ -24,8 +24,14 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'User login' })
-  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiOperation({ 
+    summary: 'User and Employee login',
+    description: 'Authenticate users and employees. Returns employee-specific information if the user is an employee.'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Login successful. Returns additional employee data if user is an employee.'
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);

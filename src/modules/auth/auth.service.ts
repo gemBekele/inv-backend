@@ -41,16 +41,21 @@ export class AuthService {
     // Get employee information
     const employee = await this.usersService.findEmployeeByUserId(user.id);
     
+    // Check if user is an employee
+    const employeeRoles = [UserRole.SHOP_EMPLOYEE, UserRole.WAREHOUSE_EMPLOYEE, UserRole.MANAGER];
+    const isEmployee = employee && employeeRoles.includes(user.role);
+    
     const payload = { 
       sub: user.id, 
       email: user.email, 
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
-      companyId: user.company?.id,
-      shopId: user.shop?.id,
-      warehouseId: user.warehouse?.id,
-      employeeId: employee?.id
+      companyId: user.company?.id || employee?.company?.id,
+      shopId: user.shop?.id || employee?.shop?.id,
+      warehouseId: user.warehouse?.id || employee?.warehouse?.id,
+      employeeId: employee?.id,
+      isEmployee: isEmployee
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -62,16 +67,50 @@ export class AuthService {
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
-    return {
+    // Build response based on whether user is an employee
+    const response: any = {
       accessToken,
       refreshToken,
       user: userWithoutPassword,
       routing: {
-        companyId: user.company?.id,
-        shopId: user.shop?.id,
-        warehouseId: user.warehouse?.id
+        companyId: user.company?.id || employee?.company?.id,
+        shopId: user.shop?.id || employee?.shop?.id,
+        warehouseId: user.warehouse?.id || employee?.warehouse?.id
       }
     };
+
+    // Add employee-specific data if user is an employee
+    if (isEmployee) {
+      response.employee = {
+        id: employee.id,
+        name: employee.name,
+        phoneNumber: employee.phoneNumber,
+        jobTitle: employee.jobTitle,
+        baseCommissionRate: employee.baseCommissionRate,
+        company: employee.company ? {
+          id: employee.company.id,
+          name: employee.company.name
+        } : null,
+        shop: employee.shop ? {
+          id: employee.shop.id,
+          name: employee.shop.name
+        } : null,
+        warehouse: employee.warehouse ? {
+          id: employee.warehouse.id,
+          name: employee.warehouse.name
+        } : null
+      };
+      
+      response.permissions = {
+        canCreateSales: true,
+        canViewSales: true,
+        canProcessPayments: true,
+        canViewCommissions: true,
+        canViewInventory: true
+      };
+    }
+
+    return response;
   }
 
   async register(registerDto: RegisterDto): Promise<User> {
@@ -135,16 +174,21 @@ export class AuthService {
       const userWithAssociations = await this.usersService.findByIdWithAssociations(user.id);
       const employee = await this.usersService.findEmployeeByUserId(user.id);
       
+      // Check if user is an employee
+      const employeeRoles = [UserRole.SHOP_EMPLOYEE, UserRole.WAREHOUSE_EMPLOYEE, UserRole.MANAGER];
+      const isEmployee = employee && employeeRoles.includes(user.role);
+      
       const newPayload = { 
         sub: user.id, 
         email: user.email, 
         role: user.role,
         firstName: user.firstName,
         lastName: user.lastName,
-        companyId: userWithAssociations.company?.id,
-        shopId: userWithAssociations.shop?.id,
-        warehouseId: userWithAssociations.warehouse?.id,
-        employeeId: employee?.id
+        companyId: userWithAssociations.company?.id || employee?.company?.id,
+        shopId: userWithAssociations.shop?.id || employee?.shop?.id,
+        warehouseId: userWithAssociations.warehouse?.id || employee?.warehouse?.id,
+        employeeId: employee?.id,
+        isEmployee: isEmployee
       };
 
       return {

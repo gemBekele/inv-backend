@@ -584,7 +584,7 @@ export class SalesService {
   async getUserInfo(userId: string): Promise<any> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['company', 'shop', 'warehouse'],
+      relations: ['company', 'company.warehouses', 'company.shops', 'shop', 'warehouse'],
       select: ['id', 'firstName', 'lastName', 'role', 'email', 'phone']
     });
 
@@ -594,8 +594,22 @@ export class SalesService {
 
     const employee = await this.employeeRepository.findOne({
       where: { user: { id: userId } },
-      relations: ['shop', 'warehouse']
+      relations: ['shop', 'warehouse', 'company', 'company.warehouses', 'company.shops']
     });
+
+    // Determine warehouse and shop - use direct assignment or fall back to company's first warehouse/shop
+    let effectiveWarehouse = user.warehouse || employee?.warehouse;
+    let effectiveShop = user.shop || employee?.shop;
+    
+    // If no warehouse assigned, use the first warehouse from company
+    if (!effectiveWarehouse && user.company?.warehouses?.length > 0) {
+      effectiveWarehouse = user.company.warehouses[0];
+    }
+    
+    // If no shop assigned, use the first shop from company (if any)
+    if (!effectiveShop && user.company?.shops?.length > 0) {
+      effectiveShop = user.company.shops[0];
+    }
 
     return {
       user: {
@@ -609,27 +623,86 @@ export class SalesService {
         id: user.company.id,
         name: user.company.name
       } : null,
-      shop: user.shop ? {
-        id: user.shop.id,
-        name: user.shop.name,
-        location: user.shop.location
+      shop: effectiveShop ? {
+        id: effectiveShop.id,
+        name: effectiveShop.name,
+        location: effectiveShop.location
       } : null,
-      warehouse: user.warehouse ? {
-        id: user.warehouse.id,
-        name: user.warehouse.name,
-        location: user.warehouse.location
+      warehouse: effectiveWarehouse ? {
+        id: effectiveWarehouse.id,
+        name: effectiveWarehouse.name,
+        location: effectiveWarehouse.location
       } : null,
       employee: employee ? {
         id: employee.id,
         shop: employee.shop ? {
           id: employee.shop.id,
           name: employee.shop.name
+        } : effectiveShop ? {
+          id: effectiveShop.id,
+          name: effectiveShop.name
         } : null,
         warehouse: employee.warehouse ? {
           id: employee.warehouse.id,
           name: employee.warehouse.name
+        } : effectiveWarehouse ? {
+          id: effectiveWarehouse.id,
+          name: effectiveWarehouse.name
         } : null
       } : null
+    };
+  }
+
+  /**
+   * Get commission information for an employee's sale
+   */
+  async getEmployeeSaleCommissions(saleId: string, employeeId: string): Promise<any> {
+    // This would integrate with the commission service to get commission details
+    // For now, return a placeholder structure showing what commissions were calculated
+    const sale = await this.salesRepository.findOne({
+      where: { id: saleId },
+      relations: ['items', 'items.product']
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Sale not found');
+    }
+
+    const employee = await this.employeeRepository.findOne({
+      where: { id: employeeId }
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    // Calculate commission information for each item
+    const commissions = sale.items.map(item => {
+      const commissionRate = item.product.commissionRate || employee.baseCommissionRate;
+      const commissionAmount = (item.total * commissionRate) / 100;
+
+      return {
+        productId: item.product.id,
+        productName: item.product.name,
+        saleItemId: item.id,
+        quantity: item.quantity,
+        itemTotal: item.total,
+        commissionRate: commissionRate,
+        commissionAmount: commissionAmount,
+        status: 'calculated'
+      };
+    });
+
+    const totalCommission = commissions.reduce((sum, comm) => sum + comm.commissionAmount, 0);
+
+    return {
+      saleId: sale.id,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      totalSaleAmount: sale.totalAmount,
+      totalCommissionAmount: totalCommission,
+      commissionDetails: commissions,
+      calculatedAt: new Date()
     };
   }
 }

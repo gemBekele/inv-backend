@@ -11,9 +11,10 @@ import { Company } from '../company/entities/company.entity';
 import { PaginatedResult } from '../../common/interfaces';
 import { CacheService } from '@/shared/cache/cache.service';
 import { CACHE_KEYS } from '../../common/constants';
+import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
 
 @Injectable()
-export class ShopsService {
+export class ShopsService extends BaseMultiTenantService {
   private readonly logger = new Logger(ShopsService.name);
 
   constructor(
@@ -28,13 +29,23 @@ export class ShopsService {
     @InjectRepository(Company)
     private readonly companyRepository: Repository<Company>,
     private readonly cacheService: CacheService,
-  ) {}
+  ) {
+    super();
+  }
 
-  async create(createShopDto: CreateShopDto): Promise<ShopResponseDto> {
+  async create(createShopDto: CreateShopDto, user?: MultiTenantUser): Promise<ShopResponseDto> {
     const { warehouseId, companyId, name, location } = createShopDto;
+    
+    // Set company context if user is provided
+    let finalCompanyId = companyId;
+    if (user) {
+      const contextData = this.setCompanyContext({ companyId }, user);
+      finalCompanyId = contextData.companyId;
+    }
+    
     const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
     if (!warehouse) throw new NotFoundException('Warehouse not found');
-    const company = await this.companyRepository.findOne({ where: { id: companyId } });
+    const company = await this.companyRepository.findOne({ where: { id: finalCompanyId } });
     if (!company) throw new NotFoundException('Company not found');
 
     const shop = this.shopRepository.create({ name, location, warehouse, company });
@@ -43,12 +54,14 @@ export class ShopsService {
     return this.mapToResponseDto(savedShop);
   }
 
-  async findAll(query: ShopQueryDto): Promise<PaginatedResult<ShopResponseDto>> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SHOPS_LIST, JSON.stringify(query));
-    const cached = await this.cacheService.get<PaginatedResult<ShopResponseDto>>(cacheKey);
-    if (cached) return cached;
-
+  async findAll(query: ShopQueryDto, user?: MultiTenantUser): Promise<PaginatedResult<ShopResponseDto>> {
     const queryBuilder = this.createQueryBuilder();
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'shop');
+    }
+    
     this.applyFilters(queryBuilder, query);
 
     const { page = 1, limit = 10 } = query;
@@ -65,24 +78,37 @@ export class ShopsService {
       totalPages: Math.ceil(total / limit),
     };
 
-    await this.cacheService.set(cacheKey, result, 300000);
     return result;
   }
 
-  async findOne(id: string): Promise<ShopResponseDto> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SHOP_DETAIL, id);
-    const cached = await this.cacheService.get<ShopResponseDto>(cacheKey);
-    if (cached) return cached;
-
-    const shop = await this.shopRepository.findOne({ where: { id }, relations: ['warehouse', 'company'] });
+  async findOne(id: string, user?: MultiTenantUser): Promise<ShopResponseDto> {
+    const queryBuilder = this.shopRepository.createQueryBuilder('shop')
+      .leftJoinAndSelect('shop.warehouse', 'warehouse')
+      .leftJoinAndSelect('shop.company', 'company')
+      .where('shop.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'shop');
+    }
+    
+    const shop = await queryBuilder.getOne();
     if (!shop) throw new NotFoundException('Shop not found');
-    const result = this.mapToResponseDto(shop);
-    await this.cacheService.set(cacheKey, result, 600000);
-    return result;
+    return this.mapToResponseDto(shop);
   }
 
-  async update(id: string, updateShopDto: UpdateShopDto): Promise<ShopResponseDto> {
-    const shop = await this.shopRepository.findOne({ where: { id }, relations: ['warehouse', 'company'] });
+  async update(id: string, updateShopDto: UpdateShopDto, user?: MultiTenantUser): Promise<ShopResponseDto> {
+    const queryBuilder = this.shopRepository.createQueryBuilder('shop')
+      .leftJoinAndSelect('shop.warehouse', 'warehouse')
+      .leftJoinAndSelect('shop.company', 'company')
+      .where('shop.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'shop');
+    }
+    
+    const shop = await queryBuilder.getOne();
     if (!shop) throw new NotFoundException('Shop not found');
     Object.assign(shop, updateShopDto);
     const updatedShop = await this.shopRepository.save(shop);
@@ -91,8 +117,16 @@ export class ShopsService {
     return this.mapToResponseDto(updatedShop);
   }
 
-  async remove(id: string): Promise<void> {
-    const shop = await this.shopRepository.findOne({ where: { id } });
+  async remove(id: string, user?: MultiTenantUser): Promise<void> {
+    const queryBuilder = this.shopRepository.createQueryBuilder('shop')
+      .where('shop.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'shop');
+    }
+    
+    const shop = await queryBuilder.getOne();
     if (!shop) throw new NotFoundException('Shop not found');
     await this.shopRepository.softDelete(id);
     await this.invalidateShopCache();

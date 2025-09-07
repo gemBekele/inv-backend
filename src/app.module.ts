@@ -20,6 +20,10 @@ import { CollectionsModule } from '@/modules/collections/collections.module';
 import { SettingsModule } from '@/modules/settings/settings.module';
 import { PurchaseModule } from '@/modules/purchase/purchase.module';
 import { ExpensesModule } from '@/modules/expenses/expenses.module';
+import { BranchModule } from '@/modules/branch/branch.module';
+import { SupplierModule } from '@/modules/supplier/supplier.module';
+import { ReportsModule } from '@/modules/reports/reports.module';
+import { CreditModule } from '@/modules/credit/credit.module';
 
 @Module({
   imports: [
@@ -50,6 +54,10 @@ import { ExpensesModule } from '@/modules/expenses/expenses.module';
     SettingsModule,
     PurchaseModule,
     ExpensesModule,
+    BranchModule,
+    SupplierModule,
+    ReportsModule,
+    CreditModule,
   ],
   providers: [
     {

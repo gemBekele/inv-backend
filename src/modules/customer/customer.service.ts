@@ -2,6 +2,8 @@ import { ConflictException, Injectable, NotFoundException, BadRequestException }
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from './entities/customer.entity';
+import { BaseMultiTenantService } from '../../common/services/base-multi-tenant.service';
+import { User } from '../users/entities/user.entity';
 import { 
   CreateCustomerDto, 
   UpdateCustomerDto, 
@@ -19,29 +21,40 @@ import { PaginatedResult } from '../../common/interfaces';
 import { CustomerStatus } from './enums/customer-status.enum';
 
 @Injectable()
-export class CustomerService {
+export class CustomerService extends BaseMultiTenantService {
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
-  ) {}
+  ) {
+    super();
+  }
 
-  async create(createCustomerDto: CreateCustomerDto): Promise<CustomerResponseDto> {
-    const existingCustomer = await this.customerRepository.findOne({ 
-      where: { phoneNumber: createCustomerDto.phoneNumber }
-    });
-    if (existingCustomer) {
-      throw new ConflictException('Customer with this phone number already exists');
+  async create(createCustomerDto: CreateCustomerDto, user?: User): Promise<CustomerResponseDto> {
+    // Set company context if user is provided
+    let finalCompanyId = createCustomerDto.companyId;
+    if (user) {
+      const contextData = this.setCompanyContext({ companyId: createCustomerDto.companyId }, user);
+      finalCompanyId = contextData.companyId;
     }
 
     const customer = this.customerRepository.create({
       ...createCustomerDto,
+      companyId: finalCompanyId,
       availableCredit: (createCustomerDto.creditLimit || 0) - (createCustomerDto.currentCreditBalance || 0)
     });
-    const savedCustomer = await this.customerRepository.save(customer);
-    return this.mapToResponseDto(savedCustomer);
+    
+    try {
+      const savedCustomer = await this.customerRepository.save(customer);
+      return this.mapToResponseDto(savedCustomer);
+    } catch (error) {
+      if (error.code === '23505' && error.constraint?.includes('phoneNumber')) {
+        throw new ConflictException('Customer with this phone number already exists in your company');
+      }
+      throw error;
+    }
   }
 
-  async findAll(query: CustomerQueryDto): Promise<PaginatedResult<CustomerResponseDto>> {
+  async findAll(query: CustomerQueryDto, user?: User): Promise<PaginatedResult<CustomerResponseDto>> {
     const { 
       page = 1, 
       limit = 10, 
@@ -57,6 +70,11 @@ export class CustomerService {
 
     const queryBuilder = this.customerRepository.createQueryBuilder('customer')
       .leftJoinAndSelect('customer.creditSales', 'creditSales');
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
 
     // Text search
     if (search) {
@@ -112,11 +130,17 @@ export class CustomerService {
     };
   }
 
-  async findOne(id: string): Promise<CustomerResponseDto> {
-    const customer = await this.customerRepository.findOne({ 
-      where: { id },
-      relations: ['creditSales']
-    });
+  async findOne(id: string, user?: User): Promise<CustomerResponseDto> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.creditSales', 'creditSales')
+      .where('customer.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
+    
+    const customer = await queryBuilder.getOne();
     if (!customer) throw new NotFoundException('Customer not found');
     return this.mapToResponseDto(customer);
   }
@@ -315,6 +339,7 @@ export class CustomerService {
       interestRate: customer.interestRate,
       allowCreditSales: customer.allowCreditSales,
       creditNotes: customer.creditNotes,
+      companyId: customer.companyId,
       canCreateCreditSale: customer.canCreateCreditSale,
       creditUtilization: customer.creditUtilization,
       isOverCreditLimit: customer.isOverCreditLimit,

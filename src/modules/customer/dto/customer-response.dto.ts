@@ -52,6 +52,9 @@ export class CustomerResponseDto {
   @ApiPropertyOptional({ description: 'Credit-related notes' })
   creditNotes?: string;
 
+  @ApiPropertyOptional({ description: 'Company ID' })
+  companyId?: string;
+
   // Computed Properties
   @ApiProperty({ description: 'Whether customer can create credit sales' })
   canCreateCreditSale: boolean;

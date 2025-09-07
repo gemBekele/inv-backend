@@ -4,6 +4,11 @@ import { Shop } from '../../shops/entities/shops.entity';
 import { Entity, Column, OneToMany } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Employee } from '../../users/entities/employee.entity';
+import { Branch } from '../../branch/entities/branch.entity';
+import { Supplier } from '../../supplier/entities/supplier.entity';
+import { Product } from '../../products/entities/product.entity';
+import { Customer } from '../../customer/entities/customer.entity';
+import { Credit } from '../../credit/entities/credit.entity';
 
 @Entity('companies')
 export class Company extends BaseEntity {
@@ -33,4 +38,19 @@ export class Company extends BaseEntity {
 
   @OneToMany(() => Employee, employee => employee.company)
   employees: Employee[];
+
+  @OneToMany(() => Branch, branch => branch.company)
+  branches: Branch[];
+
+  @OneToMany(() => Supplier, supplier => supplier.company)
+  suppliers: Supplier[];
+
+  @OneToMany(() => Product, product => product.company)
+  products: Product[];
+
+  @OneToMany(() => Customer, customer => customer.company)
+  customers: Customer[];
+
+  @OneToMany(() => Credit, credit => credit.company)
+  credits: Credit[];
 }

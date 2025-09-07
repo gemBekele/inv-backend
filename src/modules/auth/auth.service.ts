@@ -135,7 +135,7 @@ export class AuthService {
   }
 
   async adminCreateUser(adminCreateUserDto: AdminCreateUserDto, adminUser: User): Promise<User> {
-    if (adminUser.role !== UserRole.ADMIN) {
+    if (adminUser.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Only admins can create users');
     }
 

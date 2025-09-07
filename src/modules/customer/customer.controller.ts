@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards, Patch } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiProperty, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomerService } from './customer.service';
+import { CurrentUser } from '../../common/decorators';
+import { User } from '../users/entities/user.entity';
 import { 
   CreateCustomerDto, 
   UpdateCustomerDto, 
@@ -38,8 +40,11 @@ export class CustomerController {
   @ApiBody({ type: CreateCustomerDto })
   @ApiResponse({ status: 201, description: 'Customer created successfully', type: CustomerResponseDto })
   @ApiResponse({ status: 409, description: 'Customer with phone number already exists' })
-  async create(@Body() createCustomerDto: CreateCustomerDto): Promise<CustomerResponseDto> {
-    return this.customerService.create(createCustomerDto);
+  async create(
+    @Body() createCustomerDto: CreateCustomerDto,
+    @CurrentUser() user: User
+  ): Promise<CustomerResponseDto> {
+    return this.customerService.create(createCustomerDto, user);
   }
 
   @Get()
@@ -62,16 +67,22 @@ export class CustomerController {
       }
     ]
   }})
-  async findAll(@Query() query: CustomerQueryDto): Promise<PaginatedResult<CustomerResponseDto>> {
-    return this.customerService.findAll(query);
+  async findAll(
+    @Query() query: CustomerQueryDto,
+    @CurrentUser() user: User
+  ): Promise<PaginatedResult<CustomerResponseDto>> {
+    return this.customerService.findAll(query, user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a customer by ID' })
   @ApiResponse({ status: 200, description: 'Customer details', type: CustomerResponseDto })
   @ApiResponse({ status: 404, description: 'Customer not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<CustomerResponseDto> {
-    return this.customerService.findOne(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<CustomerResponseDto> {
+    return this.customerService.findOne(id, user);
   }
 
   @Put(':id')

@@ -62,7 +62,7 @@ export class ProductsController {
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: User
   ): Promise<ResponseDto<ProductResponseDto>> {
-    const product = await this.productsService.create(createProductDto, user.id);
+    const product = await this.productsService.create(createProductDto, user.id, user);
     return {
       success: true,
       message: 'Product created successfully',
@@ -76,8 +76,11 @@ export class ProductsController {
     status: HttpStatus.OK,
     description: 'Products retrieved successfully'
   })
-  async findAll(@Query() query: ProductQueryDto): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
-    const result = await this.productsService.findAll(query);
+  async findAll(
+    @Query() query: ProductQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<PaginatedResult<ProductResponseDto>>> {
+    const result = await this.productsService.findAll(query, user);
     return {
       success: true,
       message: 'Products retrieved successfully',
@@ -165,8 +168,10 @@ export class ProductsController {
     status: HttpStatus.OK,
     description: 'Categories retrieved successfully'
   })
-  async getCategories(): Promise<ResponseDto<string[]>> {
-    const categories = await this.productsService.getCategories();
+  async getCategories(
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<string[]>> {
+    const categories = await this.productsService.getCategories(user);
     return {
       success: true,
       message: 'Categories retrieved successfully',
@@ -180,8 +185,10 @@ export class ProductsController {
     status: HttpStatus.OK,
     description: 'Low stock products retrieved successfully'
   })
-  async getLowStockProducts(): Promise<ResponseDto<ProductResponseDto[]>> {
-    const products = await this.productsService.getLowStockProducts();
+  async getLowStockProducts(
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<ProductResponseDto[]>> {
+    const products = await this.productsService.getLowStockProducts(user);
     return {
       success: true,
       message: 'Low stock products retrieved successfully',
@@ -195,8 +202,10 @@ export class ProductsController {
     status: HttpStatus.OK,
     description: 'Expired products retrieved successfully'
   })
-  async getExpiredProducts(): Promise<ResponseDto<ProductResponseDto[]>> {
-    const products = await this.productsService.getExpiredProducts();
+  async getExpiredProducts(
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<ProductResponseDto[]>> {
+    const products = await this.productsService.getExpiredProducts(user);
     return {
       success: true,
       message: 'Expired products retrieved successfully',
@@ -215,8 +224,11 @@ export class ProductsController {
     status: HttpStatus.NOT_FOUND,
     description: 'Product with barcode not found'
   })
-  async scanBarcode(@Body() barcodeScanDto: BarcodeScanDto): Promise<ResponseDto<ProductResponseDto>> {
-    const product = await this.productsService.findByBarcode(barcodeScanDto.barcode);
+  async scanBarcode(
+    @Body() barcodeScanDto: BarcodeScanDto,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.findByBarcode(barcodeScanDto.barcode, user);
     return {
       success: true,
       message: 'Product found successfully',
@@ -273,8 +285,11 @@ export class ProductsController {
     status: HttpStatus.NOT_FOUND,
     description: 'Product not found'
   })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto<ProductResponseDto>> {
-    const product = await this.productsService.findOne(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<ProductResponseDto>> {
+    const product = await this.productsService.findOne(id, user);
     return {
       success: true,
       message: 'Product retrieved successfully',
@@ -301,9 +316,10 @@ export class ProductsController {
   })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateProductDto: UpdateProductDto
+    @Body() updateProductDto: UpdateProductDto,
+    @CurrentUser() user: User
   ): Promise<ResponseDto<ProductResponseDto>> {
-    const product = await this.productsService.update(id, updateProductDto);
+    const product = await this.productsService.update(id, updateProductDto, user);
     return {
       success: true,
       message: 'Product updated successfully',
@@ -323,8 +339,11 @@ export class ProductsController {
     status: HttpStatus.NOT_FOUND,
     description: 'Product not found'
   })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<ResponseDto<null>> {
-    await this.productsService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<ResponseDto<null>> {
+    await this.productsService.remove(id, user);
     return {
       success: true,
       message: 'Product deleted successfully',

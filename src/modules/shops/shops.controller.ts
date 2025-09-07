@@ -5,8 +5,9 @@ import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto } from './d
 import { AttachProductDto } from './dto/attach-product.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
-import { Roles } from '@/common/decorators';
+import { Roles, CurrentUser } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
+import { User } from '@/modules/users/entities/user.entity';
 
 @ApiTags('Shops')
 @ApiBearerAuth('access-token')
@@ -20,24 +21,24 @@ export class ShopsController {
   @ApiOperation({ summary: 'Create a new shop' })
   @ApiBody({ type: CreateShopDto })
   @ApiResponse({ status: 201, description: 'Shop created successfully', type: ShopResponseDto })
-  async create(@Body() createShopDto: CreateShopDto): Promise<ShopResponseDto> {
-    return this.shopService.create(createShopDto);
+  async create(@Body() createShopDto: CreateShopDto, @CurrentUser() user: User): Promise<ShopResponseDto> {
+    return this.shopService.create(createShopDto, user);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all shops with filtering' })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiResponse({ status: 200, description: 'List of shops', type: [ShopResponseDto] })
-  async findAll(@Query() query: ShopQueryDto): Promise<PaginatedResult<ShopResponseDto>> {
-    return this.shopService.findAll(query);
+  async findAll(@Query() query: ShopQueryDto, @CurrentUser() user: User): Promise<PaginatedResult<ShopResponseDto>> {
+    return this.shopService.findAll(query, user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a shop by ID' })
   @ApiResponse({ status: 200, description: 'Shop details', type: ShopResponseDto })
   @ApiResponse({ status: 404, description: 'Shop not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ShopResponseDto> {
-    return this.shopService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User): Promise<ShopResponseDto> {
+    return this.shopService.findOne(id, user);
   }
 
   @Put(':id')
@@ -45,8 +46,8 @@ export class ShopsController {
   @ApiBody({ type: UpdateShopDto })
   @ApiResponse({ status: 200, description: 'Shop updated successfully', type: ShopResponseDto })
   @ApiResponse({ status: 404, description: 'Shop not found' })
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() updateShopDto: UpdateShopDto): Promise<ShopResponseDto> {
-    return this.shopService.update(id, updateShopDto);
+  async update(@Param('id', ParseUUIDPipe) id: string, @Body() updateShopDto: UpdateShopDto, @CurrentUser() user: User): Promise<ShopResponseDto> {
+    return this.shopService.update(id, updateShopDto, user);
   }
 
   @Delete(':id')
@@ -54,8 +55,8 @@ export class ShopsController {
   @ApiOperation({ summary: 'Delete a shop by ID' })
   @ApiResponse({ status: 204, description: 'Shop deleted successfully' })
   @ApiResponse({ status: 404, description: 'Shop not found' })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.shopService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User): Promise<void> {
+    return this.shopService.remove(id, user);
   }
 
   @Post(':id/products')

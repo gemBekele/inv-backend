@@ -63,6 +63,9 @@ export class ProductResponseDto {
   @ApiProperty({ description: 'Minimum stock level' })
   minStockLevel: number;
 
+  @ApiPropertyOptional({ description: 'Company ID' })
+  companyId?: string;
+
   @ApiProperty()
   createdAt: Date;
 

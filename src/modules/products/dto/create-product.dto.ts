@@ -10,12 +10,21 @@ import {
   Max,
   Length,
   IsUrl,
-  IsObject
+  IsObject,
+  IsUUID
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ProductType, ProductStatus } from '../enums';
 
 export class CreateProductDto {
+  @ApiPropertyOptional({
+    description: 'Company ID (auto-set from user context)',
+    example: 'company-uuid'
+  })
+  @IsOptional()
+  @IsUUID()
+  companyId?: string;
+
   @ApiProperty({ 
     enum: ProductType, 
     description: 'Type of product (product or service)' 

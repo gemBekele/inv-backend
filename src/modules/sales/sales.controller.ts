@@ -8,8 +8,6 @@ import {
   UpdateSaleStatusDto, 
   ProcessSaleReturnDto, 
   GetInventoryLevelsQueryDto,
-  DailySalesReportQueryDto,
-  MonthlySalesReportQueryDto,
   FindCustomerByPhoneQueryDto
 } from './dto/sales-actions.dto';
 import { PaginatedResult } from '@/common/interfaces';
@@ -54,16 +52,22 @@ export class SalesController {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'status', required: false, enum: SaleStatus })
   @ApiResponse({ status: 200, description: 'List of sales', type: [SaleResponseDto] })
-  async findAll(@Query() query: SaleQueryDto): Promise<PaginatedResult<SaleResponseDto>> {
-    return this.salesService.findAll(query);
+  async findAll(
+    @Query() query: SaleQueryDto,
+    @CurrentUser() user: User
+  ): Promise<PaginatedResult<SaleResponseDto>> {
+    return this.salesService.findAll(query, user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a sale by ID' })
   @ApiResponse({ status: 200, description: 'Sale details', type: SaleResponseDto })
   @ApiResponse({ status: 404, description: 'Sale not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<SaleResponseDto> {
-    return this.salesService.findOne(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<SaleResponseDto> {
+    return this.salesService.findOne(id, user);
   }
 
   @Put(':id')
@@ -128,19 +132,7 @@ export class SalesController {
     return this.salesService.getPaymentHistory(id);
   }
 
-  @Get('reports/daily')
-  @ApiOperation({ summary: 'Get daily sales report' })
-  @ApiResponse({ status: 200, description: 'Daily sales report' })
-  async getDailySalesReport(@Query() query: DailySalesReportQueryDto) {
-    return this.salesService.getDailySalesReport(query.date);
-  }
 
-  @Get('reports/monthly')
-  @ApiOperation({ summary: 'Get monthly sales report' })
-  @ApiResponse({ status: 200, description: 'Monthly sales report' })
-  async getMonthlySalesReport(@Query() query: MonthlySalesReportQueryDto) {
-    return this.salesService.getMonthlySalesReport(query.year, query.month);
-  }
 
   @Get('search/customer-by-phone')
   @ApiOperation({ summary: 'Find customer by phone number for sales' })

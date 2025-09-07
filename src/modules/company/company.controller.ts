@@ -32,6 +32,8 @@ import {
 } from './dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { JwtAuthGuard } from '@/common/guards';
+import { CurrentUser } from '@/common/decorators';
+import { User } from '@/modules/users/entities/user.entity';
 
 @ApiTags('Companies')
 @ApiBearerAuth('access-token')
@@ -69,9 +71,10 @@ export class CompanyController {
   })
   async addWarehouses(
     @Param('id', ParseUUIDPipe) companyId: string,
-	  @Body() addWarehousesDto: AddWarehouseDto
+    @Body() addWarehousesDto: AddWarehouseDto,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.addWarehouses(companyId, addWarehousesDto.warehouseIds);
+    return this.companyService.addWarehouses(companyId, addWarehousesDto.warehouseIds, user);
   }
 
   @Get(':id/warehouses')
@@ -84,8 +87,9 @@ export class CompanyController {
   })
   async getWarehouses(
     @Param('id', ParseUUIDPipe) companyId: string,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.getWarehouses(companyId);
+    return this.companyService.getWarehouses(companyId, user);
   }
 
   @Post(':id/shops')
@@ -102,9 +106,10 @@ export class CompanyController {
   })
   async addShops(
     @Param('id', ParseUUIDPipe) companyId: string,
-    @Body() addShopsDto: AddShopDto
+    @Body() addShopsDto: AddShopDto,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.addShops(companyId, addShopsDto.shopIds);
+    return this.companyService.addShops(companyId, addShopsDto.shopIds, user);
   }
 
   @Get(':id/shops')
@@ -117,8 +122,9 @@ export class CompanyController {
   })
   async getShops(
     @Param('id', ParseUUIDPipe) companyId: string,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.getShops(companyId);
+    return this.companyService.getShops(companyId, user);
   }
 
   @Get()
@@ -131,8 +137,9 @@ export class CompanyController {
   })
   async findAll(
     @Query() query: CompanyQueryDto,
+    @CurrentUser() user: User
   ): Promise<PaginatedResult<CompanyResponseDto>> {
-    return this.companyService.findAll(query);
+    return this.companyService.findAll(query, user);
   }
 
   @Get(':id')
@@ -145,8 +152,9 @@ export class CompanyController {
   @ApiResponse({ status: 404, description: 'Company not found' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.findOne(id);
+    return this.companyService.findOne(id, user);
   }
 
   @Put(':id')
@@ -161,8 +169,9 @@ export class CompanyController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCompanyDto: UpdateCompanyDto,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.update(id, updateCompanyDto);
+    return this.companyService.update(id, updateCompanyDto, user);
   }
 
   @Delete(':id')
@@ -170,7 +179,10 @@ export class CompanyController {
   @ApiOperation({ summary: 'Delete a company by ID' })
   @ApiResponse({ status: 204, description: 'Company deleted successfully' })
   @ApiResponse({ status: 404, description: 'Company not found' })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.companyService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<void> {
+    return this.companyService.remove(id, user);
   }
 }

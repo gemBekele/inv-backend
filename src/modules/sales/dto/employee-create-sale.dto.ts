@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsArray, IsOptional, IsEnum, ValidateNested, IsPhoneNumber, IsNumber, Min } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsEnum, ValidateNested, IsPhoneNumber, IsNumber, Min, IsEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PaymentType } from '../enums';
 
@@ -17,10 +17,9 @@ class EmployeeSaleItemDto {
 export class EmployeeCreateSaleDto {
   @ApiProperty({ 
     description: 'Customer phone number for lookup', 
-    example: '+251911234567' 
+    example: '0911234567' 
   })
   @IsString()
-  @IsPhoneNumber(null, { message: 'Invalid phone number format' })
   customerPhone: string;
 
   @ApiProperty({ 

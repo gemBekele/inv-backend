@@ -1,7 +1,9 @@
-import { Entity, Column, Index, OneToMany, BeforeInsert } from 'typeorm';
+import { Entity, Column, Index, OneToMany, ManyToOne, JoinColumn, BeforeInsert } from 'typeorm';
 import { CustomerStatus } from '../enums/customer-status.enum';
 import { BaseEntity } from '../../../database/entities';
 import { CreditSales } from '../../sales/entities/credit-sales.entity';
+import { Company } from '../../company/entities/company.entity';
+import { Credit } from '../../credit/entities/credit.entity';
 // import { CustomerStatus } from './enums/customer-status.enum';
 // import { Order } from '../orders/entities/order.entity';
 // import { Sale } from '../sales/entities/sale.entity';
@@ -15,7 +17,7 @@ export enum CreditRating {
 }
 
 @Entity('customers')
-@Index(['phoneNumber'], { unique: true })
+@Index(['phoneNumber', 'companyId'], { unique: true })
 export class Customer extends BaseEntity {
   @Column({ length: 255 })
   name: string;
@@ -63,11 +65,24 @@ export class Customer extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   creditNotes?: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  companyId?: string;
+
   // @Column({ type: 'int', default: 0 })
   // loyaltyPoints: number;
 
   @OneToMany(() => CreditSales, creditSales => creditSales.customer)
   creditSales: CreditSales[];
+
+  @OneToMany(() => Credit, credit => credit.customer)
+  credits: Credit[];
+
+  @ManyToOne(() => Company, company => company.customers, { 
+    onDelete: 'SET NULL',
+    nullable: true 
+  })
+  @JoinColumn({ name: 'companyId' })
+  company?: Company;
 
   // @OneToMany(() => Order, order => order.customer)
   // orders: Order[];

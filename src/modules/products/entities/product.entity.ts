@@ -1,10 +1,11 @@
-import { Column, Entity, Index, BeforeInsert, BeforeUpdate, JoinTable, ManyToMany, OneToMany, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, BeforeInsert, BeforeUpdate, JoinTable, ManyToMany, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../../database/entities/base.entity';
 import { ProductType } from '../enums/product-type.enum';
 import { ProductStatus } from '../enums/product-status.enum';
 import { WarehouseProduct } from '../..//warehouse/entities/warehouse-product.entity';
 import { Commission } from '../../commission/entities/commission.entity';
 import { User } from '../../users/entities/user.entity';
+import { Company } from '../../company/entities/company.entity';
 
 @Entity('products')
 @Index(['sku'], { unique: true })
@@ -64,8 +65,18 @@ export class Product extends BaseEntity {
   @Column({ type: 'int', default: 0 })
   minStockLevel: number;
 
+  @Column({ type: 'uuid', nullable: true })
+  companyId?: string;
+
   @ManyToOne(() => User, { nullable: true })
   createdBy?: User;
+
+  @ManyToOne(() => Company, company => company.products, { 
+    onDelete: 'SET NULL',
+    nullable: true 
+  })
+  @JoinColumn({ name: 'companyId' })
+  company?: Company;
 
    @OneToMany(() => WarehouseProduct, warehouseProduct => warehouseProduct.product)
   warehouseProducts: WarehouseProduct[];

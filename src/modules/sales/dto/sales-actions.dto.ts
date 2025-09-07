@@ -35,36 +35,12 @@ export class GetInventoryLevelsQueryDto {
   type: 'warehouse' | 'shop';
 }
 
-export class DailySalesReportQueryDto {
-  @ApiProperty({ 
-    description: 'Date for the report (YYYY-MM-DD format)',
-    required: false,
-    example: '2024-01-15'
-  })
-  @IsString()
-  date?: string;
-}
 
-export class MonthlySalesReportQueryDto {
-  @ApiProperty({ 
-    description: 'Year for the report',
-    required: false,
-    example: 2024
-  })
-  year?: number;
-
-  @ApiProperty({ 
-    description: 'Month for the report (1-12)',
-    required: false,
-    example: 1
-  })
-  month?: number;
-}
 
 export class FindCustomerByPhoneQueryDto {
   @ApiProperty({ 
     description: 'Customer phone number',
-    example: '+1234567890'
+    example: '0912345678'
   })
   @IsString()
   phone: string;

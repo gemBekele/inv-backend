@@ -6,17 +6,20 @@ import { CreateCompanyDto, UpdateCompanyDto, CompanyQueryDto, CompanyResponseDto
 import { PaginatedResult } from '../../common/interfaces';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
 import { Shop } from '../shops/entities/shops.entity';
+import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
 
 @Injectable()
-export class CompanyService {
+export class CompanyService extends BaseMultiTenantService {
   constructor(
     @InjectRepository(Company)
     private readonly companyRepository: Repository<Company>,
-	@InjectRepository(Warehouse)
-	private readonly warehouseRepository: Repository<Warehouse>,
-	@InjectRepository(Shop)
-	private readonly shopRepository: Repository<Shop>,
-  ) {}
+    @InjectRepository(Warehouse)
+    private readonly warehouseRepository: Repository<Warehouse>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
+  ) {
+    super();
+  }
 
   async create(createCompanyDto: CreateCompanyDto): Promise<CompanyResponseDto> {
 	const existingCompany = await this.companyRepository.findOne({ where: { name: createCompanyDto.name } });
@@ -51,20 +54,34 @@ export class CompanyService {
     return this.mapToResponseDto(companyWithWarehouses);
   }
 
-  async findAll(query: CompanyQueryDto): Promise<PaginatedResult<CompanyResponseDto>> {
+  async findAll(query: CompanyQueryDto, user?: MultiTenantUser): Promise<PaginatedResult<CompanyResponseDto>> {
     const { search } = query;
     const queryBuilder = this.companyRepository.createQueryBuilder('company')
       .leftJoinAndSelect('company.warehouses', 'warehouses')
       .leftJoinAndSelect('company.shops', 'shops')
       .leftJoinAndSelect('company.employees', 'employees')
       .leftJoinAndSelect('employees.user', 'user');
-    if (search) {
-      queryBuilder.where('company.name LIKE :search OR company.address LIKE :search', { search: `%${search}%` });
+    
+    // Apply company filtering based on user role
+    if (user && user.role !== 'super_admin') {
+      if (user.companyId) {
+        queryBuilder.andWhere('company.id = :userCompanyId', {
+          userCompanyId: user.companyId,
+        });
+      } else {
+        queryBuilder.andWhere('1 = 0'); // No results if no company
+      }
     }
+    
+    if (search) {
+      queryBuilder.andWhere('company.name LIKE :search OR company.address LIKE :search', { search: `%${search}%` });
+    }
+    
     const [companies, total] = await queryBuilder
       .skip(0)
       .take(10)
       .getManyAndCount();
+      
     return {
       data: companies.map(this.mapToResponseDto),
       total,
@@ -74,29 +91,82 @@ export class CompanyService {
     };
   }
 
-  async findOne(id: string): Promise<CompanyResponseDto> {
-    const company = await this.companyRepository.findOne({ 
-      where: { id }, 
-      relations: ['warehouses', 'shops', 'employees', 'employees.user', 'users'] 
-    });
+  async findOne(id: string, user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    const queryBuilder = this.companyRepository.createQueryBuilder('company')
+      .leftJoinAndSelect('company.warehouses', 'warehouses')
+      .leftJoinAndSelect('company.shops', 'shops')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user')
+      .leftJoinAndSelect('company.users', 'users')
+      .where('company.id = :id', { id });
+    
+    // Apply company filtering
+    if (user && user.role !== 'super_admin') {
+      if (user.companyId) {
+        queryBuilder.andWhere('company.id = :userCompanyId', {
+          userCompanyId: user.companyId,
+        });
+      } else {
+        queryBuilder.andWhere('1 = 0');
+      }
+    }
+    
+    const company = await queryBuilder.getOne();
     if (!company) throw new NotFoundException('Company not found');
     return this.mapToResponseDto(company);
   }
 
-  async update(id: string, updateCompanyDto: UpdateCompanyDto): Promise<CompanyResponseDto> {
-    const company = await this.companyRepository.findOne({ where: { id } });
+  async update(id: string, updateCompanyDto: UpdateCompanyDto, user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    const queryBuilder = this.companyRepository.createQueryBuilder('company')
+      .where('company.id = :id', { id });
+    
+    // Apply company filtering
+    if (user && user.role !== 'super_admin') {
+      if (user.companyId) {
+        queryBuilder.andWhere('company.id = :userCompanyId', {
+          userCompanyId: user.companyId,
+        });
+      } else {
+        queryBuilder.andWhere('1 = 0');
+      }
+    }
+    
+    const company = await queryBuilder.getOne();
     if (!company) throw new NotFoundException('Company not found');
+    
     Object.assign(company, updateCompanyDto);
     const updatedCompany = await this.companyRepository.save(company);
     return this.mapToResponseDto(updatedCompany);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user?: MultiTenantUser): Promise<void> {
+    const queryBuilder = this.companyRepository.createQueryBuilder('company')
+      .where('company.id = :id', { id });
+    
+    // Apply company filtering
+    if (user && user.role !== 'super_admin') {
+      if (user.companyId) {
+        queryBuilder.andWhere('company.id = :userCompanyId', {
+          userCompanyId: user.companyId,
+        });
+      } else {
+        queryBuilder.andWhere('1 = 0');
+      }
+    }
+    
+    const company = await queryBuilder.getOne();
+    if (!company) throw new NotFoundException('Company not found');
+    
     const result = await this.companyRepository.delete(id);
     if (result.affected === 0) throw new NotFoundException('Company not found');
   }
 
-  async addWarehouses(companyId: string, warehouseIds: string[]): Promise<CompanyResponseDto> {
+  async addWarehouses(companyId: string, warehouseIds: string[], user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    // Validate company access
+    if (user) {
+      this.validateCompanyAccess(user, companyId);
+    }
+    
     const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['warehouses'] });
     if (!company) throw new NotFoundException('Company not found');
 
@@ -113,13 +183,23 @@ export class CompanyService {
     return this.mapToResponseDto(updatedCompany);
   }
 
-  async getWarehouses(companyId: string): Promise<CompanyResponseDto> {
-	const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['warehouses'] });
-	if (!company) throw new NotFoundException('Company not found');
-	return this.mapToResponseDto(company);
+  async getWarehouses(companyId: string, user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    // Validate company access
+    if (user) {
+      this.validateCompanyAccess(user, companyId);
+    }
+    
+    const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['warehouses'] });
+    if (!company) throw new NotFoundException('Company not found');
+    return this.mapToResponseDto(company);
   }
 
-  async addShops(companyId: string, shopIds: string[]): Promise<CompanyResponseDto> {
+  async addShops(companyId: string, shopIds: string[], user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    // Validate company access
+    if (user) {
+      this.validateCompanyAccess(user, companyId);
+    }
+    
     const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
     if (!company) throw new NotFoundException('Company not found');
 
@@ -136,7 +216,12 @@ export class CompanyService {
     return this.mapToResponseDto(updatedCompany);
   }
 
-  async getShops(companyId: string): Promise<CompanyResponseDto> {
+  async getShops(companyId: string, user?: MultiTenantUser): Promise<CompanyResponseDto> {
+    // Validate company access
+    if (user) {
+      this.validateCompanyAccess(user, companyId);
+    }
+    
     const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
     if (!company) throw new NotFoundException('Company not found');
     return this.mapToResponseDto(company);

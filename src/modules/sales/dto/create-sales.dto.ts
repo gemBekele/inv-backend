@@ -101,4 +101,10 @@ export class CreateSaleDto {
   @IsString()
   @IsUUID()
   createdBy: string;
+
+  @ApiPropertyOptional({ description: 'Company ID' })
+  @IsString()
+  @IsUUID()
+  @IsOptional()
+  companyId?: string;
 }

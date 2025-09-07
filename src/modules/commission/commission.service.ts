@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In } from 'typeorm';
 import { Commission } from './entities/commission.entity';
 import { User } from '../users/entities/user.entity';
+import { Employee } from '../users/entities/employee.entity';
 import { Product } from '../products/entities/product.entity';
 import { Sales } from '../sales/entities/sales.entity';
 import { CreateCommissionDto } from './dto/create-commission.dto';
@@ -15,6 +16,8 @@ export class CommissionService {
     private readonly commissionRepository: Repository<Commission>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Employee)
+    private readonly employeeRepository: Repository<Employee>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(Sales)
@@ -23,7 +26,7 @@ export class CommissionService {
 
   async create(createCommissionDto: CreateCommissionDto): Promise<Commission> {
     const { employeeId, productId, saleId, commissionRate, commissionAmount } = createCommissionDto;
-    const employee = await this.userRepository.findOne({ where: { id: employeeId } });
+    const employee = await this.employeeRepository.findOne({ where: { id: employeeId } });
     if (!employee) throw new NotFoundException('Employee not found');
     const product = await this.productRepository.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException('Product not found');
@@ -34,8 +37,10 @@ export class CommissionService {
       employee,
       product,
       sale,
+      amount: commissionAmount,
       commissionRate,
       commissionAmount,
+      commissionDate: new Date(),
     });
     return this.commissionRepository.save(commission);
   }

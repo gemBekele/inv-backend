@@ -11,9 +11,10 @@ import { ProductResponseDto } from '../products/dto';
 import { User } from '../users/entities/user.entity';
 import { Shop } from '../shops/entities/shops.entity';
 import { UserRole } from '@/common/enums';
+import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
 
 @Injectable()
-export class WarehouseService {
+export class WarehouseService extends BaseMultiTenantService {
   constructor(
     @InjectRepository(Warehouse)
     private readonly warehouseRepository: Repository<Warehouse>,
@@ -27,13 +28,22 @@ export class WarehouseService {
     private readonly companyRepository: Repository<Company>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+  ) {
+    super();
+  }
 
-  async create(createWarehouseDto: CreateWarehouseDto): Promise<WarehouseResponseDto> {
+  async create(createWarehouseDto: CreateWarehouseDto, user?: MultiTenantUser): Promise<WarehouseResponseDto> {
     const { companyId, managerId, ...warehouseData } = createWarehouseDto;
     
+    // Set company context if user is provided
+    let finalCompanyId = companyId;
+    if (user) {
+      const contextData = this.setCompanyContext({ companyId }, user);
+      finalCompanyId = contextData.companyId;
+    }
+    
     // Validate that the company exists
-    const company = await this.companyRepository.findOne({ where: { id: companyId } });
+    const company = await this.companyRepository.findOne({ where: { id: finalCompanyId } });
     if (!company) {
       throw new NotFoundException('Company not found');
     }
@@ -57,18 +67,26 @@ export class WarehouseService {
     return this.mapToResponseDto(savedWarehouse);
   }
 
-  async findAll(query: WarehouseQueryDto): Promise<PaginatedResult<WarehouseResponseDto>> {
+  async findAll(query: WarehouseQueryDto, user?: MultiTenantUser): Promise<PaginatedResult<WarehouseResponseDto>> {
     const { page = 1, limit = 10, search } = query;
     const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
       .leftJoinAndSelect('warehouse.company', 'company')
       .leftJoinAndSelect('warehouse.manager', 'manager');
-    if (search) {
-      queryBuilder.where('warehouse.name LIKE :search', { search: `%${search}%` });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
     }
+    
+    if (search) {
+      queryBuilder.andWhere('warehouse.name LIKE :search', { search: `%${search}%` });
+    }
+    
     const [warehouses, total] = await queryBuilder
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
+      
     return {
       data: warehouses.map(w => this.mapToResponseDto(w)),
       total,
@@ -78,30 +96,47 @@ export class WarehouseService {
     };
   }
 
-  async findAllWithProducts(query: WarehouseQueryDto): Promise<PaginatedResult<WarehouseDetailResponseDto>> {
-	const { page = 1, limit = 10, search } = query;
-	const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse').leftJoinAndSelect('warehouse.products', 'products').leftJoinAndSelect('products.product', 'product');
-	if (search) {
-	  queryBuilder.where('warehouse.name LIKE :search', { search: `%${search}%` });
-	}
-	const [warehouses, total] = await queryBuilder
-	  .skip((page - 1) * limit)
-	  .take(limit)
-	  .getManyAndCount();
-	return {
-	  data: warehouses.map(w => this.mapToDetailResponseDto(w)),
-	  total,
-	  page,
-	  limit,
-	  totalPages: Math.ceil(total / limit),
-	};
+  async findAllWithProducts(query: WarehouseQueryDto, user?: MultiTenantUser): Promise<PaginatedResult<WarehouseDetailResponseDto>> {
+    const { page = 1, limit = 10, search } = query;
+    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.products', 'products')
+      .leftJoinAndSelect('products.product', 'product');
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    }
+    
+    if (search) {
+      queryBuilder.andWhere('warehouse.name LIKE :search', { search: `%${search}%` });
+    }
+    
+    const [warehouses, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+      
+    return {
+      data: warehouses.map(w => this.mapToDetailResponseDto(w)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
-async findProductOfWarehouse(warehouseId: string, productId: string): Promise<WarehouseDetailResponseDto> {
-  const warehouse = await this.warehouseRepository.findOne({
-    where: { id: warehouseId },
-    relations: ['products', 'products.product'],
-  });
+async findProductOfWarehouse(warehouseId: string, productId: string, user?: MultiTenantUser): Promise<WarehouseDetailResponseDto> {
+  const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+    .leftJoinAndSelect('warehouse.products', 'products')
+    .leftJoinAndSelect('products.product', 'product')
+    .where('warehouse.id = :warehouseId', { warehouseId });
+  
+  // Apply company filtering
+  if (user) {
+    this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+  }
+  
+  const warehouse = await queryBuilder.getOne();
   if (!warehouse) {
     throw new NotFoundException('Warehouse not found');
   }
@@ -119,28 +154,57 @@ async findProductOfWarehouse(warehouseId: string, productId: string): Promise<Wa
   return this.mapToDetailResponseDto(warehouseWithFilteredProduct as Warehouse);
 }
 
-  async findOne(id: string): Promise<WarehouseDetailResponseDto> {
-    const warehouse = await this.warehouseRepository.findOne({
-      where: { id },
-      relations: ['products', 'products.product'],
-    });
+  async findOne(id: string, user?: MultiTenantUser): Promise<WarehouseDetailResponseDto> {
+    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.products', 'products')
+      .leftJoinAndSelect('products.product', 'product')
+      .where('warehouse.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    }
+    
+    const warehouse = await queryBuilder.getOne();
     if (!warehouse) {
       throw new NotFoundException('Warehouse not found');
     }
     return this.mapToDetailResponseDto(warehouse);
   }
 
-  async update(id: string, updateWarehouseDto: UpdateWarehouseDto): Promise<WarehouseResponseDto> {
-    const warehouse = await this.warehouseRepository.findOne({ where: { id } });
+  async update(id: string, updateWarehouseDto: UpdateWarehouseDto, user?: MultiTenantUser): Promise<WarehouseResponseDto> {
+    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+      .where('warehouse.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    }
+    
+    const warehouse = await queryBuilder.getOne();
     if (!warehouse) {
       throw new NotFoundException('Warehouse not found');
     }
+    
     Object.assign(warehouse, updateWarehouseDto);
     const updatedWarehouse = await this.warehouseRepository.save(warehouse);
     return this.mapToResponseDto(updatedWarehouse);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user?: MultiTenantUser): Promise<void> {
+    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
+      .where('warehouse.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    }
+    
+    const warehouse = await queryBuilder.getOne();
+    if (!warehouse) {
+      throw new NotFoundException('Warehouse not found');
+    }
+    
     const result = await this.warehouseRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException('Warehouse not found');

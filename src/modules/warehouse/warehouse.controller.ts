@@ -21,8 +21,9 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
-import { Roles } from '@/common/decorators';
+import { Roles, CurrentUser } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
+import { User } from '@/modules/users/entities/user.entity';
 import { WarehouseService } from './warehouse.service';
 import {
   CreateWarehouseDto,
@@ -52,8 +53,9 @@ export class WarehouseController {
   })
   async create(
     @Body() createWarehouseDto: CreateWarehouseDto,
+    @CurrentUser() user: User
   ): Promise<WarehouseResponseDto> {
-    return this.warehouseService.create(createWarehouseDto);
+    return this.warehouseService.create(createWarehouseDto, user);
   }
 
   @Get()
@@ -68,8 +70,9 @@ export class WarehouseController {
   })
   async findAll(
     @Query() query: WarehouseQueryDto,
+    @CurrentUser() user: User
   ): Promise<PaginatedResult<WarehouseResponseDto>> {
-    return this.warehouseService.findAll(query);
+    return this.warehouseService.findAll(query, user);
   }
 
   @Get('with-products')
@@ -86,8 +89,9 @@ export class WarehouseController {
   })
   async findAllWithProducts(
     @Query() query: WarehouseQueryDto,
+    @CurrentUser() user: User
   ): Promise<PaginatedResult<WarehouseDetailResponseDto>> {
-    return this.warehouseService.findAllWithProducts(query);
+    return this.warehouseService.findAllWithProducts(query, user);
   }
 
   @Get(':id')
@@ -100,8 +104,9 @@ export class WarehouseController {
   @ApiResponse({ status: 404, description: 'Warehouse not found' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
   ): Promise<WarehouseDetailResponseDto> {
-    return this.warehouseService.findOne(id);
+    return this.warehouseService.findOne(id, user);
   }
   @Get(':id/products/:productId')
   @ApiOperation({ summary: 'Get a specific product of a warehouse by ID' })
@@ -114,8 +119,9 @@ export class WarehouseController {
   async getProductOfWarehouse(
     @Param('id', ParseUUIDPipe) warehouseId: string,
     @Param('productId', ParseUUIDPipe) productId: string,
+    @CurrentUser() user: User
   ) {
-    return this.warehouseService.findProductOfWarehouse(warehouseId, productId);
+    return this.warehouseService.findProductOfWarehouse(warehouseId, productId, user);
   }
 
   @Put(':id')
@@ -130,8 +136,9 @@ export class WarehouseController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateWarehouseDto: UpdateWarehouseDto,
+    @CurrentUser() user: User
   ): Promise<WarehouseResponseDto> {
-    return this.warehouseService.update(id, updateWarehouseDto);
+    return this.warehouseService.update(id, updateWarehouseDto, user);
   }
 
   @Delete(':id')
@@ -139,8 +146,11 @@ export class WarehouseController {
   @ApiOperation({ summary: 'Delete a warehouse by ID' })
   @ApiResponse({ status: 204, description: 'Warehouse deleted successfully' })
   @ApiResponse({ status: 404, description: 'Warehouse not found' })
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    return this.warehouseService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User
+  ): Promise<void> {
+    return this.warehouseService.remove(id, user);
   }
 
   @Post(':id/products')

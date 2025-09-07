@@ -24,9 +24,10 @@ import { CACHE_KEYS } from '../../common/constants';
 import { CacheService } from '@/shared/cache/cache.service';
 import { User } from '@/modules/users/entities/user.entity';
 import { UserRole } from '@/common/enums';
+import { BaseMultiTenantService } from '@/common/services/base-multi-tenant.service';
 
 @Injectable()
-export class ProductsService {
+export class ProductsService extends BaseMultiTenantService {
   private readonly logger = new Logger(ProductsService.name);
 
   constructor(
@@ -37,29 +38,50 @@ export class ProductsService {
     @InjectRepository(ShopProduct)
     private readonly shopProductRepository: Repository<ShopProduct>,
     private readonly cacheService: CacheService,
-  ) {}
+  ) {
+    super();
+  }
 
   /**
    * Create a new product
    */
-  async create(createProductDto: CreateProductDto, userId?: string): Promise<ProductResponseDto> {
-    // Check for duplicate SKU
+  async create(createProductDto: CreateProductDto, userId?: string, user?: User): Promise<ProductResponseDto> {
+    // Set company context if user is provided
+    let finalCompanyId = createProductDto.companyId;
+    if (user) {
+      const contextData = this.setCompanyContext({ companyId: createProductDto.companyId }, user);
+      finalCompanyId = contextData.companyId;
+    }
+
+    // Check for duplicate SKU within the same company
     if (createProductDto.sku) {
-      const existingProduct = await this.productRepository.findOne({
-        where: { sku: createProductDto.sku }
-      });
+      const existingProductQuery = this.productRepository.createQueryBuilder('product')
+        .where('product.sku = :sku', { sku: createProductDto.sku });
+      
+      // Apply company filtering for duplicate check
+      if (finalCompanyId) {
+        existingProductQuery.andWhere('product.companyId = :companyId', { companyId: finalCompanyId });
+      }
+      
+      const existingProduct = await existingProductQuery.getOne();
       if (existingProduct) {
-        throw new ConflictException('Product with this SKU already exists');
+        throw new ConflictException('Product with this SKU already exists in your company');
       }
     }
 
-    // Check for duplicate barcode
+    // Check for duplicate barcode within the same company
     if (createProductDto.barcode) {
-      const existingProduct = await this.productRepository.findOne({
-        where: { barcode: createProductDto.barcode }
-      });
+      const existingProductQuery = this.productRepository.createQueryBuilder('product')
+        .where('product.barcode = :barcode', { barcode: createProductDto.barcode });
+      
+      // Apply company filtering for duplicate check
+      if (finalCompanyId) {
+        existingProductQuery.andWhere('product.companyId = :companyId', { companyId: finalCompanyId });
+      }
+      
+      const existingProduct = await existingProductQuery.getOne();
       if (existingProduct) {
-        throw new ConflictException('Product with this barcode already exists');
+        throw new ConflictException('Product with this barcode already exists in your company');
       }
     }
 
@@ -70,7 +92,10 @@ export class ProductsService {
       createProductDto.minStockLevel = 0;
     }
 
-    const product = this.productRepository.create(createProductDto);
+    const product = this.productRepository.create({
+      ...createProductDto,
+      companyId: finalCompanyId
+    });
     if (userId) {
       product.createdBy = { id: userId } as any;
     }
@@ -130,10 +155,11 @@ export class ProductsService {
   /**
    * Get all products with filtering and pagination
    */
-  async findAll(query: ProductQueryDto): Promise<PaginatedResult<ProductResponseDto>> {
+  async findAll(query: ProductQueryDto, user?: User): Promise<PaginatedResult<ProductResponseDto>> {
     const cacheKey = this.cacheService.generateKey(
       CACHE_KEYS.PRODUCTS_LIST,
-      JSON.stringify(query)
+      JSON.stringify(query),
+      user?.company?.id || 'no-company'
     );
     
     // Try to get from cache with error handling
@@ -149,7 +175,12 @@ export class ProductsService {
 
     const queryBuilder = this.createQueryBuilder();
     
-    // Apply filters
+    // Apply company filtering first
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    // Apply other filters
     this.applyFilters(queryBuilder, query);
 
     // Apply pagination
@@ -182,8 +213,12 @@ export class ProductsService {
   /**
    * Get product by ID
    */
-  async findOne(id: string): Promise<ProductResponseDto> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.PRODUCT_DETAIL, id);
+  async findOne(id: string, user?: User): Promise<ProductResponseDto> {
+    const cacheKey = this.cacheService.generateKey(
+      CACHE_KEYS.PRODUCT_DETAIL, 
+      id, 
+user?.company?.id || 'no-company'
+    );
     
     // Try to get from cache
     const cached = await this.cacheService.get<ProductResponseDto>(cacheKey);
@@ -192,7 +227,15 @@ export class ProductsService {
       return cached;
     }
 
-    const product = await this.productRepository.findOne({ where: { id } });
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .where('product.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const product = await queryBuilder.getOne();
     
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -209,30 +252,50 @@ export class ProductsService {
   /**
    * Update product
    */
-  async update(id: string, updateProductDto: UpdateProductDto): Promise<ProductResponseDto> {
-    const product = await this.productRepository.findOne({ where: { id } });
+  async update(id: string, updateProductDto: UpdateProductDto, user?: User): Promise<ProductResponseDto> {
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .where('product.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const product = await queryBuilder.getOne();
     
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    // Check for duplicate SKU (if updating)
+    // Check for duplicate SKU (if updating) within the same company
     if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
-      const existingProduct = await this.productRepository.findOne({
-        where: { sku: updateProductDto.sku }
-      });
+      const existingProductQuery = this.productRepository.createQueryBuilder('product')
+        .where('product.sku = :sku', { sku: updateProductDto.sku })
+        .andWhere('product.id != :id', { id });
+      
+      if (product.companyId) {
+        existingProductQuery.andWhere('product.companyId = :companyId', { companyId: product.companyId });
+      }
+      
+      const existingProduct = await existingProductQuery.getOne();
       if (existingProduct) {
-        throw new ConflictException('Product with this SKU already exists');
+        throw new ConflictException('Product with this SKU already exists in your company');
       }
     }
 
-    // Check for duplicate barcode (if updating)
+    // Check for duplicate barcode (if updating) within the same company
     if (updateProductDto.barcode && updateProductDto.barcode !== product.barcode) {
-      const existingProduct = await this.productRepository.findOne({
-        where: { barcode: updateProductDto.barcode }
-      });
+      const existingProductQuery = this.productRepository.createQueryBuilder('product')
+        .where('product.barcode = :barcode', { barcode: updateProductDto.barcode })
+        .andWhere('product.id != :id', { id });
+      
+      if (product.companyId) {
+        existingProductQuery.andWhere('product.companyId = :companyId', { companyId: product.companyId });
+      }
+      
+      const existingProduct = await existingProductQuery.getOne();
       if (existingProduct) {
-        throw new ConflictException('Product with this barcode already exists');
+        throw new ConflictException('Product with this barcode already exists in your company');
       }
     }
 
@@ -258,8 +321,16 @@ export class ProductsService {
   /**
    * Delete product (soft delete)
    */
-  async remove(id: string): Promise<void> {
-    const product = await this.productRepository.findOne({ where: { id } });
+  async remove(id: string, user?: User): Promise<void> {
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .where('product.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const product = await queryBuilder.getOne();
     
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -277,8 +348,13 @@ export class ProductsService {
   /**
    * Find product by barcode
    */
-  async findByBarcode(barcode: string): Promise<ProductResponseDto> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.PRODUCT_DETAIL, 'barcode', barcode);
+  async findByBarcode(barcode: string, user?: User): Promise<ProductResponseDto> {
+    const cacheKey = this.cacheService.generateKey(
+      CACHE_KEYS.PRODUCT_DETAIL, 
+      'barcode', 
+      barcode,
+user?.company?.id || 'no-company'
+    );
     
     // Try cache first
     const cached = await this.cacheService.get<ProductResponseDto>(cacheKey);
@@ -286,9 +362,15 @@ export class ProductsService {
       return cached;
     }
 
-    const product = await this.productRepository.findOne({ 
-      where: { barcode } 
-    });
+    const queryBuilder = this.productRepository.createQueryBuilder('product')
+      .where('product.barcode = :barcode', { barcode });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const product = await queryBuilder.getOne();
     
     if (!product) {
       throw new NotFoundException('Product with this barcode not found');
@@ -305,20 +387,30 @@ export class ProductsService {
   /**
    * Get low stock products
    */
-  async getLowStockProducts(): Promise<ProductResponseDto[]> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.PRODUCTS_LIST, 'low-stock');
+  async getLowStockProducts(user?: User): Promise<ProductResponseDto[]> {
+    const cacheKey = this.cacheService.generateKey(
+      CACHE_KEYS.PRODUCTS_LIST, 
+      'low-stock',
+user?.company?.id || 'no-company'
+    );
     
     const cached = await this.cacheService.get<ProductResponseDto[]>(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const products = await this.productRepository
+    const queryBuilder = this.productRepository
       .createQueryBuilder('product')
       .where('product.trackStock = :trackStock', { trackStock: true })
       .andWhere('product.stockQuantity <= product.minStockLevel')
-      .andWhere('product.status = :status', { status: ProductStatus.AVAILABLE })
-      .getMany();
+      .andWhere('product.status = :status', { status: ProductStatus.AVAILABLE });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const products = await queryBuilder.getMany();
 
     const result = products.map(product => this.mapToResponseDto(product));
     
@@ -331,14 +423,20 @@ export class ProductsService {
   /**
    * Get expired products
    */
-  async getExpiredProducts(): Promise<ProductResponseDto[]> {
+  async getExpiredProducts(user?: User): Promise<ProductResponseDto[]> {
     const now = new Date();
-    const products = await this.productRepository
+    const queryBuilder = this.productRepository
       .createQueryBuilder('product')
       .where('product.expiryDate IS NOT NULL')
       .andWhere('product.expiryDate < :now', { now })
-      .andWhere('product.status = :status', { status: ProductStatus.AVAILABLE })
-      .getMany();
+      .andWhere('product.status = :status', { status: ProductStatus.AVAILABLE });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const products = await queryBuilder.getMany();
 
     return products.map(product => this.mapToResponseDto(product));
   }
@@ -378,19 +476,29 @@ export class ProductsService {
   /**
    * Get product categories
    */
-  async getCategories(): Promise<string[]> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.PRODUCTS_LIST, 'categories');
+  async getCategories(user?: User): Promise<string[]> {
+    const cacheKey = this.cacheService.generateKey(
+      CACHE_KEYS.PRODUCTS_LIST, 
+      'categories',
+user?.company?.id || 'no-company'
+    );
     
     const cached = await this.cacheService.get<string[]>(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const result = await this.productRepository
+    const queryBuilder = this.productRepository
       .createQueryBuilder('product')
       .select('DISTINCT product.category', 'category')
-      .where('product.status = :status', { status: ProductStatus.AVAILABLE })
-      .getRawMany();
+      .where('product.status = :status', { status: ProductStatus.AVAILABLE });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'product');
+    }
+    
+    const result = await queryBuilder.getRawMany();
 
     const categories = result.map(item => item.category).filter(Boolean);
     
@@ -733,6 +841,7 @@ export class ProductsService {
       isExpired: product.calculatedIsExpired,
       stockQuantity: product.stockQuantity,
       minStockLevel: product.minStockLevel,
+      companyId: product.companyId,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt
     };

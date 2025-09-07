@@ -5,6 +5,7 @@ import { CreateSaleDto, UpdateSaleDto, SaleQueryDto, SaleResponseDto } from './d
 import { PaginatedResult } from '../../common/interfaces';
 import { CacheService } from '@/shared/cache/cache.service';
 import { CACHE_KEYS } from '../../common/constants';
+import { BaseMultiTenantService } from '../../common/services/base-multi-tenant.service';
 import { Sales } from './entities/sales.entity';
 import { Customer } from '../customer/entities/customer.entity';
 import { Product } from '../products/entities/product.entity';
@@ -21,9 +22,10 @@ import { Employee } from '../users/entities/employee.entity';
 import { CreatePaymentTransactionDto, PaymentTransactionResponseDto } from './dto/payment-transaction.dto';
 import { WarehouseProduct } from '../warehouse/entities/warehouse-product.entity';
 import { ShopProduct } from '../shops/entities/shop-product.entity';
+import { UserRole } from '../../common/enums';
 
 @Injectable()
-export class SalesService {
+export class SalesService extends BaseMultiTenantService {
   private readonly logger = new Logger(SalesService.name);
 
   constructor(
@@ -53,13 +55,28 @@ export class SalesService {
     private readonly shopProductRepository: Repository<ShopProduct>,
     private readonly cacheService: CacheService,
     private readonly commissionService: CommissionService,
-  ) {}
+  ) {
+    super();
+  }
 
   async create(createSaleDto: CreateSaleDto, currentUser?: any): Promise<SaleResponseDto> {
     const { customerId, items, paymentType, saleDate, note } = createSaleDto;
     
-    // Find customer
-    const customer = await this.customerRepository.findOne({ where: { id: customerId } });
+    // Set company context if user is provided
+    if (currentUser) {
+      const contextData = this.setCompanyContext({ companyId: createSaleDto.companyId }, currentUser);
+      createSaleDto.companyId = contextData.companyId;
+    }
+    
+    // Find customer with company filtering
+    const customerQuery = this.customerRepository.createQueryBuilder('customer')
+      .where('customer.id = :customerId', { customerId });
+    
+    if (currentUser?.company?.id) {
+      customerQuery.andWhere('customer.companyId = :companyId', { companyId: currentUser.company.id });
+    }
+    
+    const customer = await customerQuery.getOne();
     if (!customer) throw new NotFoundException('Customer not found');
 
     // Get employee record for the current user (for commission calculation)
@@ -72,19 +89,33 @@ export class SalesService {
       throw new NotFoundException('Employee record not found for current user');
     }
 
-    // Auto-determine warehouse and shop from employee assignment
+    // Auto-determine warehouse and shop from employee assignment with company filtering
     let warehouse = employee.warehouse;
     let shop = employee.shop;
 
-    // If no warehouse/shop from employee, try from createSaleDto
+    // If no warehouse/shop from employee, try from createSaleDto with company filtering
     if (!warehouse && createSaleDto.warehouseId) {
-      warehouse = await this.warehouseRepository.findOne({ where: { id: createSaleDto.warehouseId } });
-      if (!warehouse) throw new NotFoundException('Warehouse not found');
+      const warehouseQuery = this.warehouseRepository.createQueryBuilder('warehouse')
+        .where('warehouse.id = :warehouseId', { warehouseId: createSaleDto.warehouseId });
+      
+      if (currentUser?.company?.id) {
+        warehouseQuery.andWhere('warehouse.companyId = :companyId', { companyId: currentUser.company.id });
+      }
+      
+      warehouse = await warehouseQuery.getOne();
+      if (!warehouse) throw new NotFoundException('Warehouse not found or not accessible');
     }
 
     if (!shop && createSaleDto.shopId) {
-      shop = await this.shopRepository.findOne({ where: { id: createSaleDto.shopId } });
-      if (!shop) throw new NotFoundException('Shop not found');
+      const shopQuery = this.shopRepository.createQueryBuilder('shop')
+        .where('shop.id = :shopId', { shopId: createSaleDto.shopId });
+      
+      if (currentUser?.company?.id) {
+        shopQuery.andWhere('shop.companyId = :companyId', { companyId: currentUser.company.id });
+      }
+      
+      shop = await shopQuery.getOne();
+      if (!shop) throw new NotFoundException('Shop not found or not accessible');
     }
 
     // Default to employee's primary warehouse if still not found
@@ -174,12 +205,18 @@ export class SalesService {
     return this.mapToResponseDto(savedSale);
   }
 
-  async findAll(query: SaleQueryDto): Promise<PaginatedResult<SaleResponseDto>> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SALES_LIST, JSON.stringify(query));
+  async findAll(query: SaleQueryDto, user?: User): Promise<PaginatedResult<SaleResponseDto>> {
+    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SALES_LIST, JSON.stringify(query), user?.company?.id || 'no-company');
     const cached = await this.cacheService.get<PaginatedResult<SaleResponseDto>>(cacheKey);
     if (cached) return cached;
 
     const queryBuilder = this.createQueryBuilder();
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilterForSales(queryBuilder, user);
+    }
+    
     this.applyFilters(queryBuilder, query);
 
     const { page = 1, limit = 10 } = query;
@@ -200,12 +237,23 @@ export class SalesService {
     return result;
   }
 
-  async findOne(id: string): Promise<SaleResponseDto> {
-    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SALE_DETAIL, id);
+  async findOne(id: string, user?: User): Promise<SaleResponseDto> {
+    const cacheKey = this.cacheService.generateKey(CACHE_KEYS.SALE_DETAIL, id, user?.company?.id || 'no-company');
     const cached = await this.cacheService.get<SaleResponseDto>(cacheKey);
     if (cached) return cached;
 
-    const sale = await this.salesRepository.findOne({ where: { id }, relations: ['customer', 'warehouse', 'items'] });
+    const queryBuilder = this.salesRepository.createQueryBuilder('sales')
+      .leftJoinAndSelect('sales.customer', 'customer')
+      .leftJoinAndSelect('sales.warehouse', 'warehouse')
+      .leftJoinAndSelect('sales.items', 'items')
+      .where('sales.id = :id', { id });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilterForSales(queryBuilder, user);
+    }
+    
+    const sale = await queryBuilder.getOne();
     if (!sale) throw new NotFoundException('Sale not found');
     const result = this.mapToResponseDto(sale);
     await this.cacheService.set(cacheKey, result, 600000);
@@ -213,7 +261,10 @@ export class SalesService {
   }
 
   async update(id: string, updateSaleDto: UpdateSaleDto): Promise<SaleResponseDto> {
-    const sale = await this.salesRepository.findOne({ where: { id }, relations: ['customer', 'warehouse'] });
+    const sale = await this.salesRepository.findOne({ 
+      where: { id }, 
+      relations: ['customer', 'warehouse', 'shop'] 
+    });
     if (!sale) throw new NotFoundException('Sale not found');
     Object.assign(sale, updateSaleDto);
     const updatedSale = await this.salesRepository.save(sale);
@@ -239,9 +290,11 @@ export class SalesService {
 
   private createQueryBuilder(): SelectQueryBuilder<Sales> {
     return this.salesRepository.createQueryBuilder('sales')
-      .leftJoin('sales.customer', 'customer')
-      .leftJoin('sales.warehouse', 'warehouse')
-      .select(['sales', 'customer.name', 'warehouse.name']);
+      .leftJoinAndSelect('sales.customer', 'customer')
+      .leftJoinAndSelect('sales.warehouse', 'warehouse')
+      .leftJoinAndSelect('warehouse.company', 'warehouseCompany')
+      .leftJoinAndSelect('sales.shop', 'shop')
+      .leftJoinAndSelect('shop.company', 'shopCompany');
   }
 
   private applyFilters(queryBuilder: SelectQueryBuilder<Sales>, query: SaleQueryDto): void {
@@ -280,7 +333,10 @@ export class SalesService {
   }
 
   async updateStatus(saleId: string, status: SaleStatus, userId: string): Promise<SaleResponseDto> {
-    const sale = await this.salesRepository.findOne({ where: { id: saleId } });
+    const sale = await this.salesRepository.findOne({ 
+      where: { id: saleId },
+      relations: ['customer', 'warehouse', 'shop']
+    });
     if (!sale) throw new NotFoundException('Sale not found');
 
     const oldStatus = sale.status;
@@ -297,7 +353,7 @@ export class SalesService {
   async processSaleReturn(saleId: string, reason: string, userId: string): Promise<SaleResponseDto> {
     const sale = await this.salesRepository.findOne({ 
       where: { id: saleId }, 
-      relations: ['items', 'items.product'] 
+      relations: ['items', 'items.product', 'customer', 'warehouse', 'shop'] 
     });
     if (!sale) throw new NotFoundException('Sale not found');
 
@@ -341,67 +397,7 @@ export class SalesService {
     return transactions.map(transaction => this.mapToPaymentTransactionResponseDto(transaction));
   }
 
-  async getDailySalesReport(date?: string): Promise<any> {
-    const reportDate = date ? new Date(date) : new Date();
-    const startOfDay = new Date(reportDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(reportDate.setHours(23, 59, 59, 999));
 
-    const result = await this.salesRepository
-      .createQueryBuilder('sales')
-      .select([
-        'COUNT(sales.id) as totalSales',
-        'SUM(sales.totalAmount) as totalRevenue',
-        'AVG(sales.totalAmount) as averageSaleAmount',
-        'SUM(sales.taxAmount) as totalTax',
-        'SUM(sales.discountAmount) as totalDiscount'
-      ])
-      .where('sales.saleDate >= :startOfDay', { startOfDay })
-      .andWhere('sales.saleDate <= :endOfDay', { endOfDay })
-      .andWhere('sales.status != :cancelledStatus', { cancelledStatus: SaleStatus.CANCELLED })
-      .getRawOne();
-
-    return {
-      date: reportDate.toISOString().split('T')[0],
-      totalSales: parseInt(result.totalSales) || 0,
-      totalRevenue: parseFloat(result.totalRevenue) || 0,
-      averageSaleAmount: parseFloat(result.averageSaleAmount) || 0,
-      totalTax: parseFloat(result.totalTax) || 0,
-      totalDiscount: parseFloat(result.totalDiscount) || 0,
-    };
-  }
-
-  async getMonthlySalesReport(year?: number, month?: number): Promise<any> {
-    const currentDate = new Date();
-    const reportYear = year || currentDate.getFullYear();
-    const reportMonth = month || (currentDate.getMonth() + 1);
-
-    const startOfMonth = new Date(reportYear, reportMonth - 1, 1);
-    const endOfMonth = new Date(reportYear, reportMonth, 0, 23, 59, 59, 999);
-
-    const result = await this.salesRepository
-      .createQueryBuilder('sales')
-      .select([
-        'COUNT(sales.id) as totalSales',
-        'SUM(sales.totalAmount) as totalRevenue',
-        'AVG(sales.totalAmount) as averageSaleAmount',
-        'SUM(sales.taxAmount) as totalTax',
-        'SUM(sales.discountAmount) as totalDiscount'
-      ])
-      .where('sales.saleDate >= :startOfMonth', { startOfMonth })
-      .andWhere('sales.saleDate <= :endOfMonth', { endOfMonth })
-      .andWhere('sales.status != :cancelledStatus', { cancelledStatus: SaleStatus.CANCELLED })
-      .getRawOne();
-
-    return {
-      year: reportYear,
-      month: reportMonth,
-      totalSales: parseInt(result.totalSales) || 0,
-      totalRevenue: parseFloat(result.totalRevenue) || 0,
-      averageSaleAmount: parseFloat(result.averageSaleAmount) || 0,
-      totalTax: parseFloat(result.totalTax) || 0,
-      totalDiscount: parseFloat(result.totalDiscount) || 0,
-    };
-  }
 
   private async createAuditLog(sale: Sales, userId: string | null, action: AuditAction): Promise<void> {
     const auditLog = this.auditLogRepository.create({
@@ -458,6 +454,27 @@ export class SalesService {
       this.logger.debug(`Cleared ${deletedCount} sale cache entries`);
     } catch (error) {
       this.logger.warn('Failed to invalidate sale cache:', error);
+    }
+  }
+
+  /**
+   * Apply company filtering for sales based on user role and company
+   */
+  private applyCompanyFilterForSales(queryBuilder: SelectQueryBuilder<Sales>, user: User): void {
+    if (user.role === UserRole.SUPER_ADMIN) {
+      // Super admin can see all sales
+      return;
+    }
+
+    if (user.company?.id) {
+      // Filter by company ID through warehouse or shop company relationship
+      queryBuilder.andWhere(
+        '(warehouseCompany.id = :companyId OR shopCompany.id = :companyId)',
+        { companyId: user.company.id }
+      );
+    } else {
+      // If no company, show no sales
+      queryBuilder.andWhere('1 = 0');
     }
   }
 

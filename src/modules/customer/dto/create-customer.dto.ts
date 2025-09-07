@@ -90,6 +90,11 @@ export class CreateCustomerDto {
   @ApiPropertyOptional({ description: 'Additional metadata' })
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @ApiPropertyOptional({ description: 'Company ID' })
+  @IsString()
+  @IsOptional()
+  companyId?: string;
 }
 
 

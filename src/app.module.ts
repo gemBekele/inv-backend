@@ -24,6 +24,7 @@ import { BranchModule } from '@/modules/branch/branch.module';
 import { SupplierModule } from '@/modules/supplier/supplier.module';
 import { ReportsModule } from '@/modules/reports/reports.module';
 import { CreditModule } from '@/modules/credit/credit.module';
+import { FilesModule } from '@/modules/files/files.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { CreditModule } from '@/modules/credit/credit.module';
     SupplierModule,
     ReportsModule,
     CreditModule,
+    FilesModule,
   ],
   providers: [
     {

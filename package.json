@@ -1,8 +1,8 @@
 {
-  "name": "nestjs-backend-starter",
+  "name": "Gelagle-Stock-Backend",
   "version": "1.0.0",
-  "description": "A comprehensive NestJS backend starter template",
-  "author": "Your Name",
+  "description": "A comprehensive NestJS backend for Gelagle Stock Inventory System",
+  "author": "Robel Fekadu",
   "private": true,
   "license": "MIT",
   "scripts": {

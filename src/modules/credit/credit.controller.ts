@@ -30,9 +30,9 @@ import { User } from '../users/entities/user.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('Credits')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('access-token')
 @Controller('credits')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CreditController {
   constructor(private readonly creditService: CreditService) {}
 

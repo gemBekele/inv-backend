@@ -100,7 +100,21 @@ export class ProductsService extends BaseMultiTenantService {
       product.createdBy = { id: userId } as any;
     }
 
-    const savedProduct = await this.productRepository.save(product);
+      let savedProduct: Product;
+      try {
+        savedProduct = await this.productRepository.save(product);
+      } catch (error: any) {
+        // Handle unique constraint violations (Postgres: error.code === '23505')
+        if (error.code === '23505' && error.detail) {
+          // Try to extract the field name from the error detail
+          const match = error.detail.match(/Key \((.+)\)=/);
+          const field = match ? match[1] : 'unique field';
+          throw new ConflictException(`Product with this ${field} already exists in your company`);
+        }
+        // Fallback for other errors
+        this.logger.error('Product creation failed:', error);
+        throw new BadRequestException('Failed to create product. Please check your input and try again.');
+      }
 
     // Assign to warehouses if specified
     if (createProductDto.warehouseIds && createProductDto.warehouseIds.length > 0) {

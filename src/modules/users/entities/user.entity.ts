@@ -69,17 +69,29 @@ export class User extends BaseEntity {
   @OneToMany(() => Warehouse, warehouse => warehouse.manager)
   warehouses: Warehouse[];
 
-  @ApiPropertyOptional({ description: 'Associated company ID' })
+  @ApiPropertyOptional({ description: 'Company ID' })
+  @Column({ type: 'uuid', nullable: true })
+  companyId?: string;
+
+  @ApiPropertyOptional({ description: 'Shop ID' })
+  @Column({ type: 'uuid', nullable: true })
+  shopId?: string;
+
+  @ApiPropertyOptional({ description: 'Warehouse ID' })
+  @Column({ type: 'uuid', nullable: true })
+  warehouseId?: string;
+
+  @ApiPropertyOptional({ description: 'Associated company' })
   @ManyToOne(() => Company, { nullable: true })
   @JoinColumn({ name: 'companyId' })
   company?: Company;
 
-  @ApiPropertyOptional({ description: 'Associated shop ID' })
+  @ApiPropertyOptional({ description: 'Associated shop' })
   @ManyToOne(() => Shop, { nullable: true })
   @JoinColumn({ name: 'shopId' })
   shop?: Shop;
 
-  @ApiPropertyOptional({ description: 'Associated warehouse ID' })
+  @ApiPropertyOptional({ description: 'Associated warehouse' })
   @ManyToOne(() => Warehouse, { nullable: true })
   @JoinColumn({ name: 'warehouseId' })
   warehouse?: Warehouse;

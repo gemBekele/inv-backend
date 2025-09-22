@@ -39,13 +39,20 @@ import { UserRole } from '../../common/enums';
 import { ResponseDto } from '../../common/dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { User } from '../users/entities/user.entity';
+import { FilesService } from '../files/services/files.service';
+import { FileUploadDto, FileResponseDto } from '../files/dto';
+import { FileEntityType } from '../files/enums';
+import { MultiTenantUser } from '../../common/services/base-multi-tenant.service';
 
 @ApiTags('Products')
 @ApiBearerAuth('access-token')
 @Controller('products')
 @UseGuards(JwtAuthGuard)
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly filesService: FilesService
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new product or service' })
@@ -347,6 +354,108 @@ export class ProductsController {
     return {
       success: true,
       message: 'Product deleted successfully',
+      data: null
+    };
+  }
+
+  @Post(':id/images/upload')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload product image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Product image uploaded successfully',
+    type: FileResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid file or file too large'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product not found'
+  })
+  async uploadProductImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() uploadDto: FileUploadDto,
+    @CurrentUser() user: User & MultiTenantUser
+  ): Promise<ResponseDto<FileResponseDto>> {
+    // Verify product exists
+    await this.productsService.findOne(id, user);
+    
+    // Upload file with product association
+    const fileUploadDto: FileUploadDto = {
+      ...uploadDto,
+      entityId: id,
+      entityType: FileEntityType.PRODUCT
+    };
+    
+    const uploadedFile = await this.filesService.uploadFile(file, fileUploadDto, user);
+    
+    return {
+      success: true,
+      message: 'Product image uploaded successfully',
+      data: uploadedFile
+    };
+  }
+
+  @Get(':id/images')
+  @ApiOperation({ summary: 'Get product images' })
+  @ApiParam({ name: 'id', description: 'Product ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product images retrieved successfully'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product not found'
+  })
+  async getProductImages(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User & MultiTenantUser
+  ): Promise<ResponseDto<FileResponseDto[]>> {
+    // Verify product exists
+    await this.productsService.findOne(id, user);
+    
+    const images = await this.filesService.findByEntityId(id, FileEntityType.PRODUCT, user);
+    
+    return {
+      success: true,
+      message: 'Product images retrieved successfully',
+      data: images
+    };
+  }
+
+  @Delete(':productId/images/:imageId')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete product image' })
+  @ApiParam({ name: 'productId', description: 'Product ID', format: 'uuid' })
+  @ApiParam({ name: 'imageId', description: 'Image ID', format: 'uuid' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product image deleted successfully'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Product or image not found'
+  })
+  async deleteProductImage(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @CurrentUser() user: User & MultiTenantUser
+  ): Promise<ResponseDto<null>> {
+    // Verify product exists
+    await this.productsService.findOne(productId, user);
+    
+    // Delete the image
+    await this.filesService.remove(imageId, user);
+    
+    return {
+      success: true,
+      message: 'Product image deleted successfully',
       data: null
     };
   }

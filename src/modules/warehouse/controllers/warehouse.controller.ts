@@ -24,7 +24,7 @@ import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { Roles, CurrentUser } from '@/common/decorators';
 import { UserRole } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
-import { WarehouseService } from './warehouse.service';
+import { WarehouseService } from '../services/warehouse.service';
 import {
   CreateWarehouseDto,
   UpdateWarehouseDto,
@@ -32,7 +32,7 @@ import {
   WarehouseResponseDto,
   WarehouseDetailResponseDto,
   AttachProductDto,
-} from './dto';
+} from '../dto';
 import { PaginatedResult } from '@/common/interfaces';
 
 @ApiTags('Warehouses')

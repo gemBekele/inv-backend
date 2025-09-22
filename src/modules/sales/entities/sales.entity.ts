@@ -9,6 +9,7 @@ import { PaymentType, SaleStatus, DiscountType, TransactionType } from '../enums
 import { User } from '../../users/entities/user.entity';
 import { Shop } from '../../shops/entities/shops.entity';
 import { Branch } from '../../collections/entities/branch.entity';
+import { Credit } from '../../credit/entities/credit.entity';
 
 @Entity('sales')
 export class Sales extends BaseEntity {
@@ -92,6 +93,9 @@ export class Sales extends BaseEntity {
 
   @OneToMany(() => PaymentTransaction, transaction => transaction.sale)
   paymentTransactions: PaymentTransaction[];
+
+  @OneToMany(() => Credit, credit => credit.metadata?.saleId ? credit : null)
+  credits: Credit[];
 
   @BeforeInsert()
   setDefaultDate() {

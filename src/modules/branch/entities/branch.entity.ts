@@ -39,14 +39,14 @@ export class Branch extends BaseEntity {
   @Column({ type: 'json', nullable: true })
   metadata?: Record<string, any>;
 
-  @ApiProperty({ description: 'Company ID this branch belongs to' })
-  @Column({ type: 'uuid' })
-  companyId: string;
+  @ApiPropertyOptional({ description: 'Company ID this branch belongs to' })
+  @Column({ type: 'uuid', nullable: true })
+  companyId?: string;
 
   // Relations
   @ManyToOne(() => Company, company => company.branches, { 
     onDelete: 'CASCADE',
-    nullable: false 
+    nullable: true 
   })
   @JoinColumn({ name: 'companyId' })
   company: Company;

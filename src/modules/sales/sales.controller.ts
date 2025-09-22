@@ -96,9 +96,10 @@ export class SalesController {
   @ApiResponse({ status: 404, description: 'Sale not found' })
   async applyPayment(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() paymentDto: CreatePaymentTransactionDto
+    @Body() paymentDto: CreatePaymentTransactionDto,
+    @CurrentUser() currentUser: User
   ): Promise<PaymentTransactionResponseDto> {
-    return this.salesService.applyPayment(id, paymentDto);
+    return this.salesService.applyPayment(id, paymentDto, currentUser);
   }
 
   @Patch(':id/status')

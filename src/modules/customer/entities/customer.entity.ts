@@ -1,7 +1,6 @@
 import { Entity, Column, Index, OneToMany, ManyToOne, JoinColumn, BeforeInsert } from 'typeorm';
 import { CustomerStatus } from '../enums/customer-status.enum';
 import { BaseEntity } from '../../../database/entities';
-import { CreditSales } from '../../sales/entities/credit-sales.entity';
 import { Company } from '../../company/entities/company.entity';
 import { Credit } from '../../credit/entities/credit.entity';
 // import { CustomerStatus } from './enums/customer-status.enum';
@@ -71,8 +70,6 @@ export class Customer extends BaseEntity {
   // @Column({ type: 'int', default: 0 })
   // loyaltyPoints: number;
 
-  @OneToMany(() => CreditSales, creditSales => creditSales.customer)
-  creditSales: CreditSales[];
 
   @OneToMany(() => Credit, credit => credit.customer)
   credits: Credit[];
@@ -136,10 +133,10 @@ export class Customer extends BaseEntity {
   }
 
   get totalOverdueAmount(): number {
-    if (!this.creditSales) return 0;
-    return this.creditSales
-      .filter(cs => cs.isOverdue)
-      .reduce((sum, cs) => sum + cs.remainingBalance, 0);
+    if (!this.credits) return 0;
+    return this.credits
+      .filter(credit => credit.isOverdue)
+      .reduce((sum, credit) => sum + credit.remainingBalance, 0);
   }
 
   get hasOverduePayments(): boolean {

@@ -44,9 +44,10 @@ export class CreateBranchDto {
   @Type(() => Boolean)
   isActive?: boolean = true;
 
-  @ApiProperty({ description: 'Company ID this branch belongs to' })
+  @ApiPropertyOptional({ description: 'Company ID this branch belongs to' })
+  @IsOptional()
   @IsUUID('4', { message: 'Company ID must be a valid UUID' })
-  companyId: string;
+  companyId?: string;
 }
 
 export class UpdateBranchDto {
@@ -136,8 +137,8 @@ export class BranchResponseDto {
   @ApiProperty({ description: 'Is branch active' })
   isActive: boolean;
 
-  @ApiProperty({ description: 'Company ID' })
-  companyId: string;
+  @ApiPropertyOptional({ description: 'Company ID' })
+  companyId?: string;
 
   @ApiProperty({ description: 'Company information' })
   company?: {

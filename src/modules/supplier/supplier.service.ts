@@ -14,29 +14,31 @@ export class SupplierService {
   ) {}
 
   async create(createSupplierDto: CreateSupplierDto): Promise<SupplierResponseDto> {
-    // Check if supplier name already exists within the same company
-    const existingByName = await this.supplierRepository.findOne({
-      where: { 
-        name: createSupplierDto.name,
-        companyId: createSupplierDto.companyId 
-      }
-    });
-
-    if (existingByName) {
-      throw new ConflictException('Supplier with this name already exists in the company');
-    }
-
-    // Check if email already exists within the same company (if provided)
-    if (createSupplierDto.email) {
-      const existingByEmail = await this.supplierRepository.findOne({
+    // Check if supplier name already exists within the same company (only if companyId is provided)
+    if (createSupplierDto.companyId) {
+      const existingByName = await this.supplierRepository.findOne({
         where: { 
-          email: createSupplierDto.email,
+          name: createSupplierDto.name,
           companyId: createSupplierDto.companyId 
         }
       });
 
-      if (existingByEmail) {
-        throw new ConflictException('Supplier with this email already exists in the company');
+      if (existingByName) {
+        throw new ConflictException('Supplier with this name already exists in the company');
+      }
+
+      // Check if email already exists within the same company (if provided)
+      if (createSupplierDto.email) {
+        const existingByEmail = await this.supplierRepository.findOne({
+          where: { 
+            email: createSupplierDto.email,
+            companyId: createSupplierDto.companyId 
+          }
+        });
+
+        if (existingByEmail) {
+          throw new ConflictException('Supplier with this email already exists in the company');
+        }
       }
     }
 
@@ -125,8 +127,8 @@ export class SupplierService {
       throw new NotFoundException('Supplier not found');
     }
 
-    // Check for name conflict if name is being updated
-    if (updateSupplierDto.name && updateSupplierDto.name !== supplier.name) {
+    // Check for name conflict if name is being updated (only if companyId exists)
+    if (updateSupplierDto.name && updateSupplierDto.name !== supplier.name && supplier.companyId) {
       const existingByName = await this.supplierRepository.findOne({
         where: { 
           name: updateSupplierDto.name,
@@ -139,8 +141,8 @@ export class SupplierService {
       }
     }
 
-    // Check for email conflict if email is being updated
-    if (updateSupplierDto.email && updateSupplierDto.email !== supplier.email) {
+    // Check for email conflict if email is being updated (only if companyId exists)
+    if (updateSupplierDto.email && updateSupplierDto.email !== supplier.email && supplier.companyId) {
       const existingByEmail = await this.supplierRepository.findOne({
         where: { 
           email: updateSupplierDto.email,

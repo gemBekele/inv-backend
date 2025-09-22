@@ -1,15 +1,15 @@
 import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Warehouse } from './entities/warehouse.entity';
-import { Product } from '../products/entities/product.entity';
-import { WarehouseProduct } from './entities/warehouse-product.entity';
-import { Company } from '../company/entities/company.entity';
-import { CreateWarehouseDto, UpdateWarehouseDto, WarehouseQueryDto, WarehouseResponseDto, WarehouseDetailResponseDto, AttachProductDto } from './dto';
-import { PaginatedResult } from '../../common/interfaces';
-import { ProductResponseDto } from '../products/dto';
-import { User } from '../users/entities/user.entity';
-import { Shop } from '../shops/entities/shops.entity';
+import { Warehouse } from '../entities/warehouse.entity';
+import { Product } from '../../products/entities/product.entity';
+import { WarehouseProduct } from '../entities/warehouse-product.entity';
+import { Company } from '../../company/entities/company.entity';
+import { CreateWarehouseDto, UpdateWarehouseDto, WarehouseQueryDto, WarehouseResponseDto, WarehouseDetailResponseDto, AttachProductDto } from '../dto';
+import { PaginatedResult } from '../../../common/interfaces';
+import { ProductResponseDto } from '../../products/dto';
+import { User } from '../../users/entities/user.entity';
+import { Shop } from '../../shops/entities/shops.entity';
 import { UserRole } from '@/common/enums';
 import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
 

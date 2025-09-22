@@ -135,9 +135,10 @@ export class CreateSupplierDto {
   @Type(() => EmergencyContactDto)
   emergencyContact?: EmergencyContactDto;
 
-  @ApiProperty({ description: 'Company ID this supplier belongs to' })
+  @ApiPropertyOptional({ description: 'Company ID this supplier belongs to' })
+  @IsOptional()
   @IsUUID('4', { message: 'Company ID must be a valid UUID' })
-  companyId: string;
+  companyId?: string;
 }
 
 export class UpdateSupplierDto {
@@ -279,8 +280,8 @@ export class SupplierResponseDto {
   @ApiPropertyOptional({ description: 'Emergency contact' })
   emergencyContact?: EmergencyContactDto;
 
-  @ApiProperty({ description: 'Company ID' })
-  companyId: string;
+  @ApiPropertyOptional({ description: 'Company ID' })
+  companyId?: string;
 
   @ApiProperty({ description: 'Company information' })
   company?: {

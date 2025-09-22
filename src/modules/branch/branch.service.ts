@@ -13,16 +13,18 @@ export class BranchService {
   ) {}
 
   async create(createBranchDto: CreateBranchDto): Promise<BranchResponseDto> {
-    // Check if branch name already exists within the same company
-    const existingBranch = await this.branchRepository.findOne({
-      where: { 
-        name: createBranchDto.name,
-        companyId: createBranchDto.companyId 
-      }
-    });
+    // Check if branch name already exists within the same company (only if companyId is provided)
+    if (createBranchDto.companyId) {
+      const existingBranch = await this.branchRepository.findOne({
+        where: { 
+          name: createBranchDto.name,
+          companyId: createBranchDto.companyId 
+        }
+      });
 
-    if (existingBranch) {
-      throw new ConflictException('Branch with this name already exists in the company');
+      if (existingBranch) {
+        throw new ConflictException('Branch with this name already exists in the company');
+      }
     }
 
     const branch = this.branchRepository.create(createBranchDto);
@@ -101,8 +103,8 @@ export class BranchService {
       throw new NotFoundException('Branch not found');
     }
 
-    // Check for name conflict if name is being updated
-    if (updateBranchDto.name && updateBranchDto.name !== branch.name) {
+    // Check for name conflict if name is being updated (only if companyId exists)
+    if (updateBranchDto.name && updateBranchDto.name !== branch.name && branch.companyId) {
       const existingBranch = await this.branchRepository.findOne({
         where: { 
           name: updateBranchDto.name,

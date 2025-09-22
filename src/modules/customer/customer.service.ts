@@ -310,6 +310,106 @@ export class CustomerService extends BaseMultiTenantService {
       .map(customer => this.mapToResponseDto(customer));
   }
 
+  /**
+   * Validate if customer is eligible for credit sales with specific amount
+   */
+  async validateCreditEligibility(customerId: string, amount: number, user?: User): Promise<{ eligible: boolean; reason?: string }> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .where('customer.id = :customerId', { customerId });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
+    
+    const customer = await queryBuilder.getOne();
+    if (!customer) {
+      return { eligible: false, reason: 'Customer not found' };
+    }
+
+    if (!customer.allowCreditSales) {
+      return { eligible: false, reason: 'Credit sales not allowed for this customer' };
+    }
+
+    if (!customer.isCreditApproved) {
+      return { eligible: false, reason: 'Customer credit not approved' };
+    }
+
+    if (customer.status !== CustomerStatus.ACTIVE) {
+      return { eligible: false, reason: 'Customer account is not active' };
+    }
+
+    const newBalance = customer.currentCreditBalance + amount;
+    if (newBalance > customer.creditLimit) {
+      return { 
+        eligible: false, 
+        reason: `Credit limit exceeded. Available credit: ${customer.creditLimit - customer.currentCreditBalance}, Requested: ${amount}` 
+      };
+    }
+
+    return { eligible: true };
+  }
+
+  /**
+   * Get customer with credit information for sales integration
+   */
+  async getCustomerForCreditSale(customerId: string, user?: User): Promise<Customer | null> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.creditSales', 'creditSales')
+      .where('customer.id = :customerId', { customerId });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
+    
+    return await queryBuilder.getOne();
+  }
+
+  /**
+   * Update customer credit balance (used by credit sales service)
+   */
+  async adjustCreditBalance(customerId: string, amount: number, user?: User): Promise<void> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .where('customer.id = :customerId', { customerId });
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
+    
+    const customer = await queryBuilder.getOne();
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
+    }
+
+    customer.currentCreditBalance = Number(customer.currentCreditBalance) + Number(amount);
+    customer.availableCredit = customer.creditLimit - customer.currentCreditBalance;
+
+    await this.customerRepository.save(customer);
+  }
+
+  /**
+   * Get customers with overdue credit sales
+   */
+  async getCustomersWithOverdueCredit(user?: User): Promise<CustomerResponseDto[]> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.creditSales', 'creditSales')
+      .where('customer.currentCreditBalance > 0')
+      .andWhere('customer.allowCreditSales = true');
+    
+    // Apply company filtering
+    if (user) {
+      this.applyCompanyFilter(queryBuilder, user, 'customer');
+    }
+    
+    const customers = await queryBuilder.getMany();
+    
+    return customers
+      .filter(customer => customer.hasOverduePayments)
+      .map(customer => this.mapToResponseDto(customer));
+  }
+
   private async findCustomerById(id: string): Promise<Customer> {
     const customer = await this.customerRepository.findOne({
       where: { id },

@@ -73,14 +73,14 @@ export class Supplier extends BaseEntity {
   @Column({ type: 'json', nullable: true })
   metadata?: Record<string, any>;
 
-  @ApiProperty({ description: 'Company ID this supplier belongs to' })
-  @Column({ type: 'uuid' })
-  companyId: string;
+  @ApiPropertyOptional({ description: 'Company ID this supplier belongs to' })
+  @Column({ type: 'uuid', nullable: true })
+  companyId?: string;
 
   // Relations
   @ManyToOne(() => Company, company => company.suppliers, { 
     onDelete: 'CASCADE',
-    nullable: false 
+    nullable: true 
   })
   @JoinColumn({ name: 'companyId' })
   company: Company;

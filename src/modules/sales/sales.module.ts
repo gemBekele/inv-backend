@@ -16,6 +16,8 @@ import { CommissionModule } from '../commission/commission.module';
 import { RedisCacheModule } from '@/shared/cache/cache.module';
 import { WarehouseProduct } from '../warehouse/entities/warehouse-product.entity';
 import { ShopProduct } from '../shops/entities/shop-product.entity';
+import { CreditSalesController } from './controllers/credit-sales.controller';
+import { CreditModule } from '../credit/credit.module';
 
 @Module({
   imports: [
@@ -35,8 +37,9 @@ import { ShopProduct } from '../shops/entities/shop-product.entity';
     ]),
     CommissionModule,
     RedisCacheModule,
+    CreditModule,
   ],
-  controllers: [SalesController],
+  controllers: [SalesController, CreditSalesController],
   providers: [SalesService],
   exports: [SalesService],
 })

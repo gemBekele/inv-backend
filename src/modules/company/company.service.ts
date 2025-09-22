@@ -7,6 +7,7 @@ import { PaginatedResult } from '../../common/interfaces';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
 import { Shop } from '../shops/entities/shops.entity';
 import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
+import { UserRole } from '@/common/enums';
 
 @Injectable()
 export class CompanyService extends BaseMultiTenantService {
@@ -63,7 +64,7 @@ export class CompanyService extends BaseMultiTenantService {
       .leftJoinAndSelect('employees.user', 'user');
     
     // Apply company filtering based on user role
-    if (user && user.role !== 'super_admin') {
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
       if (user.companyId) {
         queryBuilder.andWhere('company.id = :userCompanyId', {
           userCompanyId: user.companyId,
@@ -101,7 +102,7 @@ export class CompanyService extends BaseMultiTenantService {
       .where('company.id = :id', { id });
     
     // Apply company filtering
-    if (user && user.role !== 'super_admin') {
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
       if (user.companyId) {
         queryBuilder.andWhere('company.id = :userCompanyId', {
           userCompanyId: user.companyId,
@@ -121,7 +122,7 @@ export class CompanyService extends BaseMultiTenantService {
       .where('company.id = :id', { id });
     
     // Apply company filtering
-    if (user && user.role !== 'super_admin') {
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
       if (user.companyId) {
         queryBuilder.andWhere('company.id = :userCompanyId', {
           userCompanyId: user.companyId,
@@ -144,7 +145,7 @@ export class CompanyService extends BaseMultiTenantService {
       .where('company.id = :id', { id });
     
     // Apply company filtering
-    if (user && user.role !== 'super_admin') {
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
       if (user.companyId) {
         queryBuilder.andWhere('company.id = :userCompanyId', {
           userCompanyId: user.companyId,

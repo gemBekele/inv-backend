@@ -11,9 +11,10 @@ export class CreateShopDto {
   @IsOptional()
   location?: string;
 
-  @ApiProperty({ description: 'Warehouse ID' })
+  @ApiPropertyOptional({ description: 'Warehouse ID' })
   @IsString()
-  warehouseId: string;
+  @IsOptional()
+  warehouseId?: string;
 
   @ApiProperty({ description: 'Company ID' })
   @IsString()

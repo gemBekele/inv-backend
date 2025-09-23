@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ShopResponseDto {
   @ApiProperty({ description: 'Unique identifier' })
@@ -10,8 +10,8 @@ export class ShopResponseDto {
   @ApiProperty({ description: 'Location' })
   location?: string;
 
-  @ApiProperty({ description: 'Warehouse name' })
-  warehouseName: string;
+  @ApiPropertyOptional({ description: 'Warehouse name' })
+  warehouseName?: string | null;
 
   @ApiProperty({ description: 'Company name' })
   companyName: string;

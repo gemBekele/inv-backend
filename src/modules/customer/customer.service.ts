@@ -68,8 +68,7 @@ export class CustomerService extends BaseMultiTenantService {
     } = query;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.creditSales', 'creditSales');
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer');
     
     // Apply company filtering
     if (user) {
@@ -132,7 +131,6 @@ export class CustomerService extends BaseMultiTenantService {
 
   async findOne(id: string, user?: User): Promise<CustomerResponseDto> {
     const queryBuilder = this.customerRepository.createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.creditSales', 'creditSales')
       .where('customer.id = :id', { id });
     
     // Apply company filtering
@@ -147,8 +145,7 @@ export class CustomerService extends BaseMultiTenantService {
 
   async update(id: string, updateCustomerDto: UpdateCustomerDto): Promise<CustomerResponseDto> {
     const customer = await this.customerRepository.findOne({ 
-      where: { id },
-      relations: ['creditSales']
+      where: { id }
     });
     if (!customer) throw new NotFoundException('Customer not found');
     
@@ -175,8 +172,7 @@ export class CustomerService extends BaseMultiTenantService {
 
   async remove(id: string): Promise<void> {
     const customer = await this.customerRepository.findOne({ 
-      where: { id },
-      relations: ['creditSales']
+      where: { id }
     });
     if (!customer) throw new NotFoundException('Customer not found');
     
@@ -257,9 +253,7 @@ export class CustomerService extends BaseMultiTenantService {
   }
 
   async getCreditStats(): Promise<CreditStatsResponseDto> {
-    const allCustomers = await this.customerRepository.find({
-      relations: ['creditSales']
-    });
+    const allCustomers = await this.customerRepository.find();
 
     const creditCustomers = allCustomers.filter(c => c.creditLimit > 0);
     const approvedCreditCustomers = creditCustomers.filter(c => c.isCreditApproved);
@@ -290,8 +284,7 @@ export class CustomerService extends BaseMultiTenantService {
 
   async findByPhoneNumber(phoneNumber: string): Promise<Customer | null> {
     return this.customerRepository.findOne({
-      where: { phoneNumber },
-      relations: ['creditSales']
+      where: { phoneNumber }
     });
   }
 
@@ -301,8 +294,7 @@ export class CustomerService extends BaseMultiTenantService {
         status: CustomerStatus.ACTIVE,
         allowCreditSales: true,
         isCreditApproved: true
-      },
-      relations: ['creditSales']
+      }
     });
 
     return customers
@@ -355,7 +347,6 @@ export class CustomerService extends BaseMultiTenantService {
    */
   async getCustomerForCreditSale(customerId: string, user?: User): Promise<Customer | null> {
     const queryBuilder = this.customerRepository.createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.creditSales', 'creditSales')
       .where('customer.id = :customerId', { customerId });
     
     // Apply company filtering
@@ -394,7 +385,6 @@ export class CustomerService extends BaseMultiTenantService {
    */
   async getCustomersWithOverdueCredit(user?: User): Promise<CustomerResponseDto[]> {
     const queryBuilder = this.customerRepository.createQueryBuilder('customer')
-      .leftJoinAndSelect('customer.creditSales', 'creditSales')
       .where('customer.currentCreditBalance > 0')
       .andWhere('customer.allowCreditSales = true');
     
@@ -412,8 +402,7 @@ export class CustomerService extends BaseMultiTenantService {
 
   private async findCustomerById(id: string): Promise<Customer> {
     const customer = await this.customerRepository.findOne({
-      where: { id },
-      relations: ['creditSales']
+      where: { id }
     });
     if (!customer) {
       throw new NotFoundException('Customer not found');

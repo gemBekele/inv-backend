@@ -18,8 +18,8 @@ export class Shop extends BaseEntity {
   @OneToMany(() => Employee, employee => employee.shop)
   employees: Employee[];
 
-  @ManyToOne(() => Warehouse, warehouse => warehouse.shops)
-  warehouse: Warehouse;
+  @ManyToOne(() => Warehouse, warehouse => warehouse.shops, { nullable: true })
+  warehouse?: Warehouse;
 
   @ManyToOne(() => Company, company => company.id)
   company: Company;

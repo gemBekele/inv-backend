@@ -43,8 +43,11 @@ export class ShopsService extends BaseMultiTenantService {
       finalCompanyId = contextData.companyId;
     }
     
-    const warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
-    if (!warehouse) throw new NotFoundException('Warehouse not found');
+    let warehouse = null;
+    if (warehouseId) {
+      warehouse = await this.warehouseRepository.findOne({ where: { id: warehouseId } });
+      if (!warehouse) throw new NotFoundException('Warehouse not found');
+    }
     const company = await this.companyRepository.findOne({ where: { id: finalCompanyId } });
     if (!company) throw new NotFoundException('Company not found');
 
@@ -152,7 +155,7 @@ export class ShopsService extends BaseMultiTenantService {
       id: shop.id,
       name: shop.name,
       location: shop.location,
-      warehouseName: shop.warehouse.name,
+      warehouseName: shop.warehouse?.name || null,
       companyName: shop.company.name,
       createdAt: shop.createdAt,
       updatedAt: shop.updatedAt,

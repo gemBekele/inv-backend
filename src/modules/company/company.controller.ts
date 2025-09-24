@@ -29,6 +29,7 @@ import {
   CompanyResponseDto,
   AddWarehouseDto,
   AddShopDto,
+  BranchesResponseDto,
 } from './dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { JwtAuthGuard } from '@/common/guards';
@@ -125,6 +126,19 @@ export class CompanyController {
     @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
     return this.companyService.getShops(companyId, user);
+  }
+
+  @Get('branches')
+  @ApiOperation({ summary: 'Get all branches (warehouses and shops) accessible to the user' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of branches accessible to the user',
+    type: BranchesResponseDto,
+  })
+  async getBranches(
+    @CurrentUser() user: User
+  ): Promise<BranchesResponseDto> {
+    return this.companyService.getBranches(user);
   }
 
   @Get()

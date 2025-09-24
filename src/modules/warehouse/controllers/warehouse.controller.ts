@@ -96,6 +96,7 @@ export class WarehouseController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a warehouse by ID with attached products' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search term for filtering products' })
   @ApiResponse({
     status: 200,
     description: 'Warehouse details',
@@ -104,9 +105,10 @@ export class WarehouseController {
   @ApiResponse({ status: 404, description: 'Warehouse not found' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: WarehouseQueryDto,
     @CurrentUser() user: User
   ): Promise<WarehouseDetailResponseDto> {
-    return this.warehouseService.findOne(id, user);
+    return this.warehouseService.findOne(id, query, user);
   }
   @Get(':id/products/:productId')
   @ApiOperation({ summary: 'Get a specific product of a warehouse by ID' })

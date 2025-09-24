@@ -65,8 +65,8 @@ export class SalesReportsService {
       employeeName: sale.createdBy?.fullName || 'Unknown',
       shopName: sale.shop?.name,
       warehouseName: sale.warehouse?.name,
-      totalAmount: sale.totalAmount,
-      taxAmount: sale.taxAmount,
+      totalAmount: Number(sale.totalAmount),
+      taxAmount: Number(sale.taxAmount),
       commissionAmount: 0, // Will be calculated if needed
       itemCount: sale.items?.length || 0,
       paymentMethod: sale.paymentType || 'Unknown',
@@ -74,10 +74,10 @@ export class SalesReportsService {
 
     const summary = {
       totalSales: items.length,
-      totalRevenue: items.reduce((sum, item) => sum + item.totalAmount, 0),
-      totalTax: items.reduce((sum, item) => sum + item.taxAmount, 0),
-      totalCommission: items.reduce((sum, item) => sum + item.commissionAmount, 0),
-      averageSaleAmount: items.length > 0 ? items.reduce((sum, item) => sum + item.totalAmount, 0) / items.length : 0,
+      totalRevenue: Number(items.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2)),
+      totalTax: Number(items.reduce((sum, item) => sum + item.taxAmount, 0).toFixed(2)),
+      totalCommission: Number(items.reduce((sum, item) => sum + item.commissionAmount, 0).toFixed(2)),
+      averageSaleAmount: items.length > 0 ? Number((items.reduce((sum, item) => sum + item.totalAmount, 0) / items.length).toFixed(2)) : 0,
       totalCustomers: new Set(items.filter(item => item.customerName !== 'Walk-in Customer').map(item => item.customerName)).size,
     };
 
@@ -96,16 +96,18 @@ export class SalesReportsService {
     const queryBuilder = this.salesItemRepository
       .createQueryBuilder('salesItem')
       .leftJoinAndSelect('salesItem.product', 'product')
-      .leftJoinAndSelect('salesItem.sale', 'sale')
-      .leftJoinAndSelect('sale.shop', 'shop')
-      .leftJoinAndSelect('sale.branch', 'branch')
-      .where('sale.createdAt BETWEEN :startDate AND :endDate', {
+      .leftJoinAndSelect('salesItem.sales', 'sales')
+      .leftJoinAndSelect('sales.shop', 'shop')
+      .leftJoinAndSelect('shop.company', 'shopCompany')
+      .leftJoinAndSelect('sales.warehouse', 'warehouse')
+      .leftJoinAndSelect('warehouse.company', 'warehouseCompany')
+      .where('sales.createdAt BETWEEN :startDate AND :endDate', {
         startDate: query.startDate,
         endDate: query.endDate
       });
 
     if (query.companyId) {
-      queryBuilder.andWhere('shop.companyId = :companyId OR branch.companyId = :companyId', { 
+      queryBuilder.andWhere('(shopCompany.id = :companyId OR warehouseCompany.id = :companyId)', { 
         companyId: query.companyId 
       });
     }
@@ -131,15 +133,16 @@ export class SalesReportsService {
           averagePrice: 0,
         };
       }
-      acc[productId].totalQuantitySold += item.quantity;
-      acc[productId].totalRevenue += item.total;
+      acc[productId].totalQuantitySold += Number(item.quantity);
+      acc[productId].totalRevenue += Number(item.total);
       acc[productId].totalSales += 1;
       return acc;
     }, {});
 
     const items = Object.values(productSales).map((item: any) => ({
       ...item,
-      averagePrice: item.totalRevenue / item.totalQuantitySold,
+      totalRevenue: Number(item.totalRevenue.toFixed(2)),
+      averagePrice: Number((item.totalRevenue / item.totalQuantitySold).toFixed(2)),
     }));
 
     return {
@@ -154,7 +157,7 @@ export class SalesReportsService {
       summary: {
         totalProductsSold: items.length,
         totalQuantity: items.reduce((sum, item) => sum + item.totalQuantitySold, 0),
-        totalRevenue: items.reduce((sum, item) => sum + item.totalRevenue, 0),
+        totalRevenue: Number(items.reduce((sum, item) => sum + item.totalRevenue, 0).toFixed(2)),
       }
     };
   }
@@ -164,14 +167,16 @@ export class SalesReportsService {
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.createdBy', 'createdBy')
       .leftJoinAndSelect('sale.shop', 'shop')
-      .leftJoinAndSelect('sale.branch', 'branch')
+      .leftJoinAndSelect('shop.company', 'shopCompany')
+      .leftJoinAndSelect('sale.warehouse', 'warehouse')
+      .leftJoinAndSelect('warehouse.company', 'warehouseCompany')
       .where('sale.createdAt BETWEEN :startDate AND :endDate', {
         startDate: query.startDate,
         endDate: query.endDate
       });
 
     if (query.companyId) {
-      queryBuilder.andWhere('shop.companyId = :companyId OR branch.companyId = :companyId', { 
+      queryBuilder.andWhere('(shopCompany.id = :companyId OR warehouseCompany.id = :companyId)', { 
         companyId: query.companyId 
       });
     }
@@ -195,13 +200,14 @@ export class SalesReportsService {
         };
       }
       acc[employeeId].totalSales += 1;
-      acc[employeeId].totalRevenue += sale.totalAmount;
+      acc[employeeId].totalRevenue += Number(sale.totalAmount);
       return acc;
     }, {});
 
     const items = Object.values(employeeSales).map((item: any) => ({
       ...item,
-      averageSaleAmount: item.totalRevenue / item.totalSales,
+      totalRevenue: Number(item.totalRevenue.toFixed(2)),
+      averageSaleAmount: Number((item.totalRevenue / item.totalSales).toFixed(2)),
     }));
 
     return {
@@ -216,7 +222,7 @@ export class SalesReportsService {
       summary: {
         totalEmployees: items.length,
         totalSales: items.reduce((sum, item) => sum + item.totalSales, 0),
-        totalRevenue: items.reduce((sum, item) => sum + item.totalRevenue, 0),
+        totalRevenue: Number(items.reduce((sum, item) => sum + item.totalRevenue, 0).toFixed(2)),
       }
     };
   }
@@ -226,7 +232,9 @@ export class SalesReportsService {
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.customer', 'customer')
       .leftJoinAndSelect('sale.shop', 'shop')
-      .leftJoinAndSelect('sale.branch', 'branch')
+      .leftJoinAndSelect('shop.company', 'shopCompany')
+      .leftJoinAndSelect('sale.warehouse', 'warehouse')
+      .leftJoinAndSelect('warehouse.company', 'warehouseCompany')
       .where('sale.createdAt BETWEEN :startDate AND :endDate', {
         startDate: query.startDate,
         endDate: query.endDate
@@ -234,7 +242,7 @@ export class SalesReportsService {
       .andWhere('customer.id IS NOT NULL');
 
     if (query.companyId) {
-      queryBuilder.andWhere('shop.companyId = :companyId OR branch.companyId = :companyId', { 
+      queryBuilder.andWhere('(shopCompany.id = :companyId OR warehouseCompany.id = :companyId)', { 
         companyId: query.companyId 
       });
     }
@@ -259,12 +267,17 @@ export class SalesReportsService {
         };
       }
       acc[customerId].totalSales += 1;
-      acc[customerId].totalRevenue += sale.totalAmount;
+      acc[customerId].totalRevenue += Number(sale.totalAmount);
       if (sale.createdAt > acc[customerId].lastPurchaseDate) {
         acc[customerId].lastPurchaseDate = sale.createdAt;
       }
       return acc;
     }, {});
+
+    const items = Object.values(customerSales).map((item: any) => ({
+      ...item,
+      totalRevenue: Number(item.totalRevenue.toFixed(2)),
+    }));
 
     return {
       metadata: {
@@ -274,11 +287,11 @@ export class SalesReportsService {
         totalRecords: Object.keys(customerSales).length,
         filters: this.extractFilters(query),
       },
-      items: Object.values(customerSales),
+      items,
       summary: {
         totalCustomers: Object.keys(customerSales).length,
         totalSales: sales.length,
-        totalRevenue: sales.reduce((sum, sale) => sum + sale.totalAmount, 0),
+        totalRevenue: Number(sales.reduce((sum, sale) => sum + Number(sale.totalAmount), 0).toFixed(2)),
       }
     };
   }
@@ -305,9 +318,9 @@ export class SalesReportsService {
       employeeName: commission.employee?.name,
       productName: commission.product?.name,
       saleId: commission.sale?.id,
-      commissionAmount: commission.commissionAmount,
-      commissionRate: commission.commissionRate,
-      saleAmount: commission.amount, // Use 'amount' field from Commission entity
+      commissionAmount: Number(commission.commissionAmount),
+      commissionRate: Number(commission.commissionRate),
+      saleAmount: Number(commission.amount), // Use 'amount' field from Commission entity
       date: commission.createdAt,
       status: commission.isApproved ? 'Approved' : 'Pending', // Map boolean to string status
     }));
@@ -323,10 +336,10 @@ export class SalesReportsService {
       items,
       summary: {
         totalCommissions: items.length,
-        totalCommissionAmount: items.reduce((sum, item) => sum + item.commissionAmount, 0),
-        totalSalesAmount: items.reduce((sum, item) => sum + item.saleAmount, 0),
+        totalCommissionAmount: Number(items.reduce((sum, item) => sum + item.commissionAmount, 0).toFixed(2)),
+        totalSalesAmount: Number(items.reduce((sum, item) => sum + item.saleAmount, 0).toFixed(2)),
         averageCommissionRate: items.length > 0 ? 
-          items.reduce((sum, item) => sum + item.commissionRate, 0) / items.length : 0,
+          Number((items.reduce((sum, item) => sum + item.commissionRate, 0) / items.length).toFixed(2)) : 0,
       }
     };
   }

@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Company } from './entities/company.entity';
-import { CreateCompanyDto, UpdateCompanyDto, CompanyQueryDto, CompanyResponseDto } from './dto';
+import { CreateCompanyDto, UpdateCompanyDto, CompanyQueryDto, CompanyResponseDto, BranchesResponseDto, BranchItemDto } from './dto';
 import { PaginatedResult } from '../../common/interfaces';
 import { Warehouse } from '../warehouse/entities/warehouse.entity';
 import { Shop } from '../shops/entities/shops.entity';
@@ -226,6 +226,64 @@ export class CompanyService extends BaseMultiTenantService {
     const company = await this.companyRepository.findOne({ where: { id: companyId }, relations: ['shops'] });
     if (!company) throw new NotFoundException('Company not found');
     return this.mapToResponseDto(company);
+  }
+
+  async getBranches(user: MultiTenantUser): Promise<BranchesResponseDto> {
+    if (!user.companyId && user.role !== UserRole.SUPER_ADMIN) {
+      throw new NotFoundException('User does not belong to any company');
+    }
+
+    // Get warehouses and shops for the user's company
+    const warehouseQuery = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.company', 'company');
+    
+    const shopQuery = this.shopRepository.createQueryBuilder('shop')
+      .leftJoinAndSelect('shop.company', 'company');
+
+    // Apply company filtering
+    if (user.role !== UserRole.SUPER_ADMIN && user.companyId) {
+      warehouseQuery.andWhere('company.id = :companyId', { companyId: user.companyId });
+      shopQuery.andWhere('company.id = :companyId', { companyId: user.companyId });
+    }
+
+    const [warehouses, shops] = await Promise.all([
+      warehouseQuery.getMany(),
+      shopQuery.getMany()
+    ]);
+
+    // Convert warehouses to branch items
+    const warehouseBranches: BranchItemDto[] = warehouses.map(warehouse => ({
+      id: warehouse.id,
+      name: warehouse.name,
+      type: 'warehouse' as const,
+      location: warehouse.location,
+      description: warehouse.description,
+      createdAt: warehouse.createdAt,
+      updatedAt: warehouse.updatedAt,
+    }));
+
+    // Convert shops to branch items
+    const shopBranches: BranchItemDto[] = shops.map(shop => ({
+      id: shop.id,
+      name: shop.name,
+      type: 'shop' as const,
+      location: shop.location,
+      description: undefined, // Shop entity doesn't have description field
+      createdAt: shop.createdAt,
+      updatedAt: shop.updatedAt,
+    }));
+
+    // Combine and sort by name
+    const allBranches = [...warehouseBranches, ...shopBranches].sort((a, b) => 
+      a.name.localeCompare(b.name)
+    );
+
+    return {
+      branches: allBranches,
+      total: allBranches.length,
+      totalWarehouses: warehouseBranches.length,
+      totalShops: shopBranches.length,
+    };
   }
 
   private mapToResponseDto(company: Company): CompanyResponseDto {

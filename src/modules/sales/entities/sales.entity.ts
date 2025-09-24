@@ -31,7 +31,7 @@ export class Sales extends BaseEntity {
   @Column({ type: 'enum', enum: PaymentType })
   paymentType: PaymentType;
 
-  @Column({ type: 'enum', enum: SaleStatus, default: SaleStatus.PENDING })
+  @Column({ type: 'enum', enum: SaleStatus, default: SaleStatus.COMPLETED })
   status: SaleStatus;
 
   @Column({ length: 255, nullable: true })

@@ -154,22 +154,43 @@ async findProductOfWarehouse(warehouseId: string, productId: string, user?: Mult
   return this.mapToDetailResponseDto(warehouseWithFilteredProduct as Warehouse);
 }
 
-  async findOne(id: string, user?: MultiTenantUser): Promise<WarehouseDetailResponseDto> {
-    const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
-      .leftJoinAndSelect('warehouse.products', 'products')
-      .leftJoinAndSelect('products.product', 'product')
+  async findOne(id: string, query?: WarehouseQueryDto, user?: MultiTenantUser): Promise<WarehouseDetailResponseDto> {
+    // First, get the warehouse to ensure it exists and user has access
+    const warehouseQuery = this.warehouseRepository.createQueryBuilder('warehouse')
       .where('warehouse.id = :id', { id });
     
     // Apply company filtering
     if (user) {
-      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+      this.applyCompanyFilter(warehouseQuery, user, 'warehouse');
     }
     
-    const warehouse = await queryBuilder.getOne();
+    const warehouse = await warehouseQuery.getOne();
     if (!warehouse) {
       throw new NotFoundException('Warehouse not found');
     }
-    return this.mapToDetailResponseDto(warehouse);
+    
+    // Now get the products with search filtering
+    const productsQuery = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.products', 'products')
+      .leftJoinAndSelect('products.product', 'product')
+      .where('warehouse.id = :id', { id });
+    
+    // Apply company filtering again
+    if (user) {
+      this.applyCompanyFilter(productsQuery, user, 'warehouse');
+    }
+    
+    // Apply product search filter if search term is provided
+    if (query?.search) {
+      productsQuery.andWhere(
+        '(products.id IS NULL OR product.name ILIKE :search OR product.sku ILIKE :search OR product.category ILIKE :search OR product.description ILIKE :search)',
+        { search: `%${query.search}%` }
+      );
+    }
+    
+    const warehouseWithProducts = await productsQuery.getOne();
+    // Use the original warehouse info but with filtered products
+    return this.mapToDetailResponseDto(warehouseWithProducts || { ...warehouse, products: [] });
   }
 
   async update(id: string, updateWarehouseDto: UpdateWarehouseDto, user?: MultiTenantUser): Promise<WarehouseResponseDto> {

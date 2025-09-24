@@ -133,6 +133,7 @@ export class SalesService extends BaseMultiTenantService {
       shop,
       paymentType,
       saleDate: saleDate || new Date(),
+      status: SaleStatus.COMPLETED, // Auto-approve all sales
       note,
       createdBy: currentUser ? { id: currentUser.id } as User : null,
     });

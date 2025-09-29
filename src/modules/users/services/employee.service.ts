@@ -226,7 +226,10 @@ export class EmployeeService {
 
   private applyFilters(queryBuilder: SelectQueryBuilder<Employee>, query: EmployeeQueryDto): void {
     if (query.search) {
-      queryBuilder.andWhere('employee.name ILIKE :search OR user.fullName ILIKE :search OR shop.name ILIKE :search', { search: `%${query.search}%` });
+      queryBuilder.andWhere(
+        '(employee.name ILIKE :search OR CONCAT(user.firstName, \'\', user.lastName) ILIKE :search OR employee.jobTitle ILIKE :search)',
+        { search: `%${query.search}%` }
+      );
     }
     queryBuilder.orderBy('employee.createdAt', 'DESC');
   }

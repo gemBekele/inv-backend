@@ -141,7 +141,7 @@ export class Credit extends BaseEntity {
   }
 
   get totalAmount(): number {
-    return this.principalAmount + this.interestAmount + this.feesAmount;
+    return Number(this.principalAmount) + Number(this.interestAmount) + Number(this.feesAmount);
   }
 
   get isOverdue(): boolean {

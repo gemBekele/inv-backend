@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CreditService } from './credit.service';
 import { CreditController } from './credit.controller';
 import { Credit, CreditPayment, CreditTransaction } from './entities';
+import { Customer } from '../customer/entities/customer.entity';
 
 @Module({
   imports: [
@@ -10,6 +11,7 @@ import { Credit, CreditPayment, CreditTransaction } from './entities';
       Credit,
       CreditPayment,
       CreditTransaction,
+      Customer,
     ]),
   ],
   controllers: [CreditController],

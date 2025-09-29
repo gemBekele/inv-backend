@@ -5,6 +5,7 @@ import { Credit, CreditPayment, CreditTransaction } from './entities';
 import { CreateCreditDto, UpdateCreditDto, CreateCreditPaymentDto, CreditQueryDto, CreditResponseDto, CreditPaymentResponseDto, CreditTransactionResponseDto, CreditStatsResponseDto } from './dto';
 import { CreditStatus, PaymentStatus, TransactionType } from './enums';
 import { User } from '../users/entities/user.entity';
+import { Customer } from '../customer/entities/customer.entity';
 import { BaseMultiTenantService } from '../../common/services/base-multi-tenant.service';
 import { UserRole } from '../../common/enums';
 
@@ -17,14 +18,39 @@ export class CreditService extends BaseMultiTenantService {
     private paymentRepository: Repository<CreditPayment>,
     @InjectRepository(CreditTransaction)
     private transactionRepository: Repository<CreditTransaction>,
+    @InjectRepository(Customer)
+    private customerRepository: Repository<Customer>,
   ) {
     super();
   }
 
   async create(createCreditDto: CreateCreditDto, user: User): Promise<CreditResponseDto> {
+    // Handle company context for different user types
+    let companyId = user.company?.id || (user as any).companyId;
+    
+    // For super admin, require explicit companyId in the request or derive from customer
+    if (user.role === UserRole.SUPER_ADMIN && !companyId) {
+      if (createCreditDto.customerId) {
+        // Get company from customer
+        const customer = await this.customerRepository.findOne({
+          where: { id: createCreditDto.customerId },
+          relations: ['company']
+        });
+        if (customer?.company?.id) {
+          companyId = customer.company.id;
+        }
+      }
+      
+      if (!companyId) {
+        throw new BadRequestException('Super admin must specify companyId or provide a customer with company assignment');
+      }
+    } else if (!companyId) {
+      throw new BadRequestException('User must be assigned to a company to create credits');
+    }
+
     const credit = this.creditRepository.create({
       ...createCreditDto,
-      companyId: user.company?.id,
+      companyId: companyId,
       createdById: user.id,
       issueDate: createCreditDto.issueDate ? new Date(createCreditDto.issueDate) : new Date(),
       dueDate: createCreditDto.dueDate ? new Date(createCreditDto.dueDate) : undefined,
@@ -84,7 +110,7 @@ export class CreditService extends BaseMultiTenantService {
     this.applyCompanyFilter(queryBuilder, {
       id: user.id,
       role: user.role,
-      companyId: user.company?.id
+      companyId: user.company?.id || (user as any).companyId
     }, 'credit');
 
     const credit = await queryBuilder.getOne();
@@ -329,7 +355,7 @@ export class CreditService extends BaseMultiTenantService {
     this.applyCompanyFilter(queryBuilder, {
       id: user.id,
       role: user.role,
-      companyId: user.company?.id
+      companyId: user.company?.id || (user as any).companyId
     }, 'credit');
 
     return queryBuilder;
@@ -471,8 +497,8 @@ export class CreditService extends BaseMultiTenantService {
       paidAmount: credit.paidAmount,
       remainingBalance: credit.remainingBalance,
       interestRate: credit.interestRate,
-      issueDate: credit.issueDate.toISOString().split('T')[0],
-      dueDate: credit.dueDate.toISOString().split('T')[0],
+      issueDate: credit.issueDate instanceof Date ? credit.issueDate.toISOString().split('T')[0] : new Date(credit.issueDate).toISOString().split('T')[0],
+      dueDate: credit.dueDate instanceof Date ? credit.dueDate.toISOString().split('T')[0] : new Date(credit.dueDate).toISOString().split('T')[0],
       paymentTermsDays: credit.paymentTermsDays,
       creditRating: credit.creditRating,
       description: credit.description,
@@ -485,8 +511,8 @@ export class CreditService extends BaseMultiTenantService {
       paymentPercentage: credit.paymentPercentage,
       agingCategory: credit.agingCategory,
       riskLevel: credit.riskLevel,
-      createdAt: credit.createdAt.toISOString(),
-      updatedAt: credit.updatedAt.toISOString(),
+      createdAt: credit.createdAt instanceof Date ? credit.createdAt.toISOString() : new Date(credit.createdAt).toISOString(),
+      updatedAt: credit.updatedAt instanceof Date ? credit.updatedAt.toISOString() : new Date(credit.updatedAt).toISOString(),
       customer: credit.customer ? {
         id: credit.customer.id,
         name: credit.customer.name,

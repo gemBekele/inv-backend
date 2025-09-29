@@ -225,27 +225,51 @@ export class SalesService extends BaseMultiTenantService {
           
           if (totalAmount > availableCredit) {
             this.logger.warn(`Credit limit exceeded for customer ${customer.id}. Required: ${totalAmount}, Available: ${availableCredit}`);
-            // You might want to throw an error here or handle it differently
+            // Continue with credit creation but log the warning
           }
         }
 
-        // Create credit record
-        await this.creditService.create({
+        // Ensure we have proper user context for credit creation
+        const creditUser = currentUser || {
+          id: employee.user?.id || 'system',
+          company: { id: employee.company?.id || createSaleDto.companyId },
+          role: currentUser?.role || 'company_admin'
+        };
+
+        // Create credit record with proper context
+        const creditDto = {
           type: CreditType.RECEIVABLE,
           principalAmount: totalAmount,
           customerId: customer.id,
-          paymentTermsDays: 30, // Default or from customer settings
-          interestRate: customer.interestRate || 0, // From customer or default
-          description: `Credit for sale ${savedSale.invoiceNumber}`,
-          notes: `Credit created from sales ${savedSale.invoiceNumber}`,
-          metadata: { saleId: savedSale.id }
-        }, currentUser || { id: 'system', company: { id: currentUser?.company?.id } });
+          paymentTermsDays: customer.paymentTermsDays || 30,
+          interestRate: customer.interestRate || 0,
+          description: `Credit for sale ${savedSale.invoiceNumber || savedSale.id}`,
+          notes: `Credit created from sales ${savedSale.invoiceNumber || savedSale.id}`,
+          metadata: { 
+            saleId: savedSale.id,
+            invoiceNumber: savedSale.invoiceNumber,
+            customerName: customer.name,
+            warehouseId: warehouse?.id,
+            shopId: shop?.id
+          }
+        };
+
+        await this.creditService.create(creditDto, creditUser as any);
         
         this.logger.log(`Credit record created successfully for sales ${savedSale.id}`);
       } catch (error) {
-        this.logger.error(`Failed to create credit record for sales ${savedSale.id}: ${error.message}`);
-        // If credit creation fails, we should rollback the main sale or handle gracefully
-        // For now, we'll continue but log the error
+        this.logger.error(`Failed to create credit record for sales ${savedSale.id}: ${error.message}`, error.stack);
+        // Log detailed error for debugging
+        this.logger.error('Credit creation error details:', {
+          saleId: savedSale.id,
+          customerId: customer.id,
+          totalAmount,
+          currentUser: currentUser?.id,
+          employee: employee?.id,
+          error: error.message
+        });
+        // Continue with sale completion even if credit creation fails
+        // In production, you might want to implement compensation logic
       }
     }
 

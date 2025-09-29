@@ -5,7 +5,8 @@ import { CurrentUser } from '@/common/decorators';
 import { PaginationDto } from '@/common/dto';
 import { PurchaseService } from './purchase.service';
 import { 
-  CreatePurchaseOrderDto, 
+  CreatePurchaseOrderDto,
+  CreatePurchaseOrderWithNewProductDto,
   PurchaseOrderResponseDto,
   PurchaseOrderQueryDto,
   PurchaseOrderApprovalDto,
@@ -27,6 +28,17 @@ export class PurchaseController {
   @ApiResponse({ status: 201, description: 'Purchase order created successfully', type: PurchaseOrderResponseDto })
   async create(@Body() createPurchaseOrderDto: CreatePurchaseOrderDto, @CurrentUser('id') userId: string) {
     return this.purchaseService.createPurchaseOrder(createPurchaseOrderDto, userId);
+  }
+
+  @Post('orders/new-product')
+  @ApiOperation({ summary: 'Create a purchase order with new products' })
+  @ApiResponse({ status: 201, description: 'Purchase order with new products created successfully', type: PurchaseOrderResponseDto })
+  async createWithNewProduct(
+    @Body() createDto: CreatePurchaseOrderWithNewProductDto, 
+    @CurrentUser('id') userId: string,
+    @CurrentUser() user: any
+  ) {
+    return this.purchaseService.createPurchaseOrderWithNewProduct(createDto, userId, user);
   }
 
   @Get('orders')

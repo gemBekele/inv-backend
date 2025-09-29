@@ -7,6 +7,7 @@ import { PurchaseItem } from './entities/purchase-item.entity';
 import { PurchasePayment } from './entities/purchase-payment.entity';
 import { PurchaseReceiving } from './entities/purchase-receiving.entity';
 import { PurchaseReceivingItem } from './entities/purchase-receiving-item.entity';
+import { ProductsModule } from '../products/products.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PurchaseReceivingItem } from './entities/purchase-receiving-item.entity
       PurchaseReceiving,
       PurchaseReceivingItem,
     ]),
+    ProductsModule,
   ],
   controllers: [PurchaseController],
   providers: [PurchaseService],

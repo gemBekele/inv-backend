@@ -14,7 +14,9 @@ import {
   PurchasePaymentStatus,
   ReceivingStatus 
 } from './enums';
-import { PurchaseOrderQueryDto } from './dto';
+import { PurchaseOrderQueryDto, CreatePurchaseOrderWithNewProductDto } from './dto';
+import { ProductsService } from '../products/products.service';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class PurchaseService {
@@ -29,28 +31,66 @@ export class PurchaseService {
     private purchaseReceivingRepository: Repository<PurchaseReceiving>,
     @InjectRepository(PurchaseReceivingItem)
     private purchaseReceivingItemRepository: Repository<PurchaseReceivingItem>,
+    private productsService: ProductsService,
   ) {}
 
   async createPurchaseOrder(createPurchaseOrderDto: any, userId: string): Promise<PurchaseOrder> {
+    // Calculate totals for items first
+    let subtotal = 0;
+    const processedItems = createPurchaseOrderDto.items?.map((item: any) => {
+      const totalCost = item.quantity * item.unitCost;
+      subtotal += totalCost;
+      return {
+        ...item,
+        totalCost,
+        product: { id: item.productId }
+      };
+    }) || [];
+
     const purchaseOrder = this.purchaseOrderRepository.create({
       ...createPurchaseOrderDto,
+      items: processedItems,
       createdBy: { id: userId } as any,
+      subtotal,
     }) as unknown as PurchaseOrder;
 
-    // Calculate totals
-    let subtotal = 0;
-    if (createPurchaseOrderDto.items) {
-      createPurchaseOrderDto.items.forEach((item: any) => {
-        item.totalCost = item.quantity * item.unitCost;
-        subtotal += item.totalCost;
-      });
-    }
-
-    purchaseOrder.subtotal = subtotal;
     purchaseOrder.totalAmount = subtotal + (purchaseOrder.taxAmount || 0) + (purchaseOrder.shippingCost || 0) + (purchaseOrder.otherCharges || 0) - (purchaseOrder.discountAmount || 0);
     purchaseOrder.remainingAmount = purchaseOrder.totalAmount;
 
     return await this.purchaseOrderRepository.save(purchaseOrder);
+  }
+
+  async createPurchaseOrderWithNewProduct(createDto: CreatePurchaseOrderWithNewProductDto, userId: string, user: User): Promise<PurchaseOrder> {
+    // Create products first
+    const createdProducts = [];
+    for (const item of createDto.items) {
+      const productDto = {
+        ...item.product,
+        companyId: createDto.companyId || user.company?.id,
+        stockQuantity: 0, // New products start with 0 stock
+        minStockLevel: 0,
+        trackStock: true
+      };
+      const createdProduct = await this.productsService.create(productDto, userId, user);
+      createdProducts.push({ ...item, productId: createdProduct.id });
+    }
+
+    // Create purchase order with created products
+    const purchaseOrderDto = {
+      ...createDto,
+      items: createdProducts.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitCost: item.unitCost,
+        discountRate: item.discountRate,
+        taxRate: item.taxRate,
+        expectedDeliveryDate: item.expectedDeliveryDate,
+        notes: item.notes,
+        specifications: item.specifications
+      }))
+    };
+
+    return await this.createPurchaseOrder(purchaseOrderDto, userId);
   }
 
   async findAll(

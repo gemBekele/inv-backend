@@ -2,7 +2,10 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Settings } from './entities/settings.entity';
+import { StaffPermissions } from './entities/staff-permissions.entity';
 import { UpdateSettingsDto, SettingsResponseDto } from './dto/settings.dto';
+import { StaffMemberDto, StaffPermissionsDto } from './dto/staff-permissions.dto';
+import { User } from '../users/entities/user.entity';
 import { CACHE_KEYS } from '../../common/constants';
 import { CacheService } from '@/shared/cache/cache.service';
 
@@ -13,6 +16,10 @@ export class SettingsService {
   constructor(
     @InjectRepository(Settings)
     private readonly settingsRepository: Repository<Settings>,
+    @InjectRepository(StaffPermissions)
+    private readonly staffPermissionsRepository: Repository<StaffPermissions>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -114,6 +121,112 @@ export class SettingsService {
   async isFeatureEnabled(featureKey: keyof Settings): Promise<boolean> {
     const value = await this.getSettingValue<boolean>(featureKey);
     return Boolean(value);
+  }
+
+  /**
+   * Get staff member with permissions
+   */
+  async getStaffMember(userId: string): Promise<StaffMemberDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['company', 'shop', 'warehouse'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('Staff member not found');
+    }
+
+    const permissions = await this.getStaffPermissions(userId);
+
+    return {
+      id: user.id,
+      name: user.fullName,
+      email: user.email,
+      role: user.role,
+      branch: user.shop?.name || user.warehouse?.name || user.company?.name,
+      permissions,
+    };
+  }
+
+  /**
+   * Get staff permissions
+   */
+  async getStaffPermissions(userId: string): Promise<StaffPermissionsDto> {
+    let staffPermissions = await this.staffPermissionsRepository.findOne({
+      where: { userId },
+    });
+
+    if (!staffPermissions) {
+      // Create default permissions
+      staffPermissions = this.staffPermissionsRepository.create({
+        userId,
+        featureAccess: {
+          manageItem: false,
+          manageAttribute: false,
+          managePartner: false,
+          manageLocation: false,
+          stockIn: false,
+          stockOut: false,
+          adjust: false,
+          moveStock: false,
+          manageStockInDraft: false,
+          manageStockOutDraft: false,
+        },
+        itemAttributeAccess: {
+          type: false,
+          brand: false,
+        },
+      });
+      await this.staffPermissionsRepository.save(staffPermissions);
+    }
+
+    return {
+      featureAccess: staffPermissions.featureAccess,
+      itemAttributeAccess: staffPermissions.itemAttributeAccess,
+    };
+  }
+
+  /**
+   * Update staff permissions
+   */
+  async updateStaffPermissions(userId: string, permissions: StaffPermissionsDto): Promise<StaffPermissionsDto> {
+    let staffPermissions = await this.staffPermissionsRepository.findOne({
+      where: { userId },
+    });
+
+    if (!staffPermissions) {
+      staffPermissions = this.staffPermissionsRepository.create({
+        userId,
+        ...permissions,
+      });
+    } else {
+      Object.assign(staffPermissions, permissions);
+    }
+
+    await this.staffPermissionsRepository.save(staffPermissions);
+    this.logger.log(`Updated permissions for user ${userId}`);
+
+    return {
+      featureAccess: staffPermissions.featureAccess,
+      itemAttributeAccess: staffPermissions.itemAttributeAccess,
+    };
+  }
+
+  /**
+   * Remove staff member
+   */
+  async removeStaffMember(userId: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Staff member not found');
+    }
+
+    // Remove permissions first
+    await this.staffPermissionsRepository.delete({ userId });
+    
+    // Remove user
+    await this.userRepository.remove(user);
+    this.logger.log(`Removed staff member ${userId}`);
   }
 
   /**

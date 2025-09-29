@@ -39,9 +39,9 @@ export class TransferController {
   constructor(private readonly transferService: TransferService) {}
 
   @Post()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new inventory transfer' })
+  @ApiOperation({ summary: 'Create a new inventory transfer or request' })
   @ApiResponse({
     status: 201,
     description: 'Transfer created successfully',
@@ -191,5 +191,23 @@ export class TransferController {
     @CurrentUser() user: User,
   ): Promise<TransferResponseDto> {
     return this.transferService.reject(id, rejectionReason, user);
+  }
+
+  @Post('request')
+  @Roles(UserRole.SHOP_EMPLOYEE, UserRole.MANAGER, UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Request product transfer when stock is low (shop employees)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Transfer request created successfully',
+    type: TransferResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - validation errors' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  async requestTransfer(
+    @Body() createTransferDto: CreateTransferDto,
+    @CurrentUser() user: User,
+  ): Promise<TransferResponseDto> {
+    return this.transferService.createRequest(createTransferDto, user);
   }
 }

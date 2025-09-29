@@ -100,14 +100,22 @@ export class TransferService extends BaseMultiTenantService {
   }
 
   async findOne(id: string, user: User): Promise<TransferResponseDto> {
-    const transfer = await this.transferRepository.findOne({
-      where: { id },
-      relations: [
-        'sourceWarehouse', 'sourceWarehouse.company', 'sourceShop', 'sourceShop.company',
-        'destinationWarehouse', 'destinationWarehouse.company', 'destinationShop', 'destinationShop.company',
-        'createdBy', 'approvedBy', 'items', 'items.product'
-      ]
-    });
+    const transfer = await this.transferRepository
+      .createQueryBuilder('transfer')
+      .leftJoinAndSelect('transfer.sourceWarehouse', 'sourceWarehouse')
+      .leftJoinAndSelect('sourceWarehouse.company', 'sourceWarehouseCompany')
+      .leftJoinAndSelect('transfer.sourceShop', 'sourceShop')
+      .leftJoinAndSelect('sourceShop.company', 'sourceShopCompany')
+      .leftJoinAndSelect('transfer.destinationWarehouse', 'destinationWarehouse')
+      .leftJoinAndSelect('destinationWarehouse.company', 'destinationWarehouseCompany')
+      .leftJoinAndSelect('transfer.destinationShop', 'destinationShop')
+      .leftJoinAndSelect('destinationShop.company', 'destinationShopCompany')
+      .leftJoinAndSelect('transfer.createdBy', 'createdBy')
+      .leftJoinAndSelect('transfer.approvedBy', 'approvedBy')
+      .leftJoinAndSelect('transfer.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .where('transfer.id = :id', { id })
+      .getOne();
 
     if (!transfer) {
       throw new NotFoundException('Transfer not found');
@@ -122,13 +130,18 @@ export class TransferService extends BaseMultiTenantService {
   }
 
   async update(id: string, updateTransferDto: UpdateTransferDto, user: User): Promise<TransferResponseDto> {
-    const transfer = await this.transferRepository.findOne({ 
-      where: { id },
-      relations: [
-        'sourceWarehouse', 'sourceWarehouse.company', 'sourceShop', 'sourceShop.company',
-        'destinationWarehouse', 'destinationWarehouse.company', 'destinationShop', 'destinationShop.company'
-      ]
-    });
+    const transfer = await this.transferRepository
+      .createQueryBuilder('transfer')
+      .leftJoinAndSelect('transfer.sourceWarehouse', 'sourceWarehouse')
+      .leftJoinAndSelect('sourceWarehouse.company', 'sourceWarehouseCompany')
+      .leftJoinAndSelect('transfer.sourceShop', 'sourceShop')
+      .leftJoinAndSelect('sourceShop.company', 'sourceShopCompany')
+      .leftJoinAndSelect('transfer.destinationWarehouse', 'destinationWarehouse')
+      .leftJoinAndSelect('destinationWarehouse.company', 'destinationWarehouseCompany')
+      .leftJoinAndSelect('transfer.destinationShop', 'destinationShop')
+      .leftJoinAndSelect('destinationShop.company', 'destinationShopCompany')
+      .where('transfer.id = :id', { id })
+      .getOne();
 
     if (!transfer) {
       throw new NotFoundException('Transfer not found');
@@ -189,6 +202,26 @@ export class TransferService extends BaseMultiTenantService {
       status: TransferStatus.REJECTED, 
       rejectionReason 
     }, user);
+  }
+
+  async createRequest(createTransferDto: CreateTransferDto, user: User): Promise<TransferResponseDto> {
+    // Shop employees can only request transfers from their shop to warehouse
+    if (user.role === UserRole.SHOP_EMPLOYEE) {
+      if (!user.shopId) {
+        throw new BadRequestException('Shop employee must be assigned to a shop');
+      }
+      // Force shop-to-warehouse transfer for shop employees
+      createTransferDto.type = TransferType.SHOP_TO_WAREHOUSE;
+      createTransferDto.sourceShopId = user.shopId;
+      createTransferDto.sourceWarehouseId = undefined;
+    } else {
+      // For other roles, require type to be specified
+      if (!createTransferDto.type) {
+        throw new BadRequestException('Transfer type is required');
+      }
+    }
+    
+    return this.create(createTransferDto, user);
   }
 
   private async validateTransferLocations(dto: CreateTransferDto, user: User): Promise<void> {
@@ -286,14 +319,22 @@ export class TransferService extends BaseMultiTenantService {
 
       // Check source inventory based on transfer type
       if (dto.sourceWarehouseId) {
-        const warehouseProduct = await this.warehouseProductRepository.findOne({
-          where: { warehouse: { id: dto.sourceWarehouseId }, product: { id: item.productId } }
-        });
+        const warehouseProduct = await this.warehouseProductRepository
+          .createQueryBuilder('wp')
+          .innerJoin('wp.warehouse', 'w')
+          .innerJoin('wp.product', 'p')
+          .where('w.id = :warehouseId', { warehouseId: dto.sourceWarehouseId })
+          .andWhere('p.id = :productId', { productId: item.productId })
+          .getOne();
         availableStock = warehouseProduct?.stockQuantity || 0;
       } else if (dto.sourceShopId) {
-        const shopProduct = await this.shopProductRepository.findOne({
-          where: { shop: { id: dto.sourceShopId }, product: { id: item.productId } }
-        });
+        const shopProduct = await this.shopProductRepository
+          .createQueryBuilder('sp')
+          .innerJoin('sp.shop', 's')
+          .innerJoin('sp.product', 'p')
+          .where('s.id = :shopId', { shopId: dto.sourceShopId })
+          .andWhere('p.id = :productId', { productId: item.productId })
+          .getOne();
         availableStock = shopProduct?.stockQuantity || 0;
       }
 
@@ -335,17 +376,25 @@ export class TransferService extends BaseMultiTenantService {
 
   private async decreaseSourceInventory(transfer: Transfer, item: TransferItem): Promise<void> {
     if (transfer.sourceWarehouseId) {
-      const warehouseProduct = await this.warehouseProductRepository.findOne({
-        where: { warehouse: { id: transfer.sourceWarehouseId }, product: { id: item.productId } }
-      });
+      const warehouseProduct = await this.warehouseProductRepository
+        .createQueryBuilder('wp')
+        .innerJoin('wp.warehouse', 'w')
+        .innerJoin('wp.product', 'p')
+        .where('w.id = :warehouseId', { warehouseId: transfer.sourceWarehouseId })
+        .andWhere('p.id = :productId', { productId: item.productId })
+        .getOne();
       if (warehouseProduct) {
         warehouseProduct.stockQuantity = Math.max(0, warehouseProduct.stockQuantity - item.quantity);
         await this.warehouseProductRepository.save(warehouseProduct);
       }
     } else if (transfer.sourceShopId) {
-      const shopProduct = await this.shopProductRepository.findOne({
-        where: { shop: { id: transfer.sourceShopId }, product: { id: item.productId } }
-      });
+      const shopProduct = await this.shopProductRepository
+        .createQueryBuilder('sp')
+        .innerJoin('sp.shop', 's')
+        .innerJoin('sp.product', 'p')
+        .where('s.id = :shopId', { shopId: transfer.sourceShopId })
+        .andWhere('p.id = :productId', { productId: item.productId })
+        .getOne();
       if (shopProduct) {
         shopProduct.stockQuantity = Math.max(0, shopProduct.stockQuantity - item.quantity);
         await this.shopProductRepository.save(shopProduct);
@@ -355,9 +404,13 @@ export class TransferService extends BaseMultiTenantService {
 
   private async increaseDestinationInventory(transfer: Transfer, item: TransferItem): Promise<void> {
     if (transfer.destinationWarehouseId) {
-      let warehouseProduct = await this.warehouseProductRepository.findOne({
-        where: { warehouse: { id: transfer.destinationWarehouseId }, product: { id: item.productId } }
-      });
+      let warehouseProduct = await this.warehouseProductRepository
+        .createQueryBuilder('wp')
+        .innerJoin('wp.warehouse', 'w')
+        .innerJoin('wp.product', 'p')
+        .where('w.id = :warehouseId', { warehouseId: transfer.destinationWarehouseId })
+        .andWhere('p.id = :productId', { productId: item.productId })
+        .getOne();
       
       if (warehouseProduct) {
         warehouseProduct.stockQuantity += item.quantity;
@@ -371,9 +424,13 @@ export class TransferService extends BaseMultiTenantService {
       }
       await this.warehouseProductRepository.save(warehouseProduct);
     } else if (transfer.destinationShopId) {
-      let shopProduct = await this.shopProductRepository.findOne({
-        where: { shop: { id: transfer.destinationShopId }, product: { id: item.productId } }
-      });
+      let shopProduct = await this.shopProductRepository
+        .createQueryBuilder('sp')
+        .innerJoin('sp.shop', 's')
+        .innerJoin('sp.product', 'p')
+        .where('s.id = :shopId', { shopId: transfer.destinationShopId })
+        .andWhere('p.id = :productId', { productId: item.productId })
+        .getOne();
       
       if (shopProduct) {
         shopProduct.stockQuantity += item.quantity;

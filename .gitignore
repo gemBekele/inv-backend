@@ -23,6 +23,11 @@ Thumbs.db
 # Coverage
 coverage
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # Misc
 *.tgz
 *.swp

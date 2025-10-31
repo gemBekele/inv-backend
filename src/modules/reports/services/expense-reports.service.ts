@@ -28,7 +28,8 @@ export class ExpenseReportsService {
 
     // Apply additional filters
     if (query.companyId) {
-      queryBuilder.andWhere('expense.companyId = :companyId', { companyId: query.companyId });
+      // Filter by joined company relation to avoid relying on a non-existent FK column name
+      queryBuilder.andWhere('company.id = :companyId', { companyId: query.companyId });
     }
 
     const [expenses, totalCount] = await queryBuilder.getManyAndCount();
@@ -101,7 +102,7 @@ export class ExpenseReportsService {
 
     // Apply additional filters
     if (query.companyId) {
-      queryBuilder.andWhere('expense.companyId = :companyId', { companyId: query.companyId });
+      queryBuilder.andWhere('expense.company.id = :companyId', { companyId: query.companyId });
     }
 
     const categoryStats = await queryBuilder.getRawMany();

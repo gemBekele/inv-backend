@@ -20,6 +20,12 @@ async function bootstrap() {
   app.useLogger(logger);
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   app.setGlobalPrefix(configService.get<string>('app.apiPrefix') || 'api/v1');
+  app.enableCors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
   
   // Serve static files from uploads directory
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
@@ -87,9 +93,10 @@ async function bootstrap() {
     logger.error('Error during admin seeding:', error);
   }
 
-  const port = configService.get<number>('app.port') || 3000;
-  await app.listen(port, () => {
-    logger.log(`Server started on http://localhost:${port}`, 'Bootstrap');
+  const port = configService.get<number>('app.port') || 5000;
+  const host = '0.0.0.0';
+  await app.listen(port, host, () => {
+    logger.log(`Server started on http://${host}:${port}`, 'Bootstrap');
   });
 }
 

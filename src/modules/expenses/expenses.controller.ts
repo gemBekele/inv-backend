@@ -56,8 +56,8 @@ export class ExpensesController {
   @Get('dashboard/stats')
   @ApiOperation({ summary: 'Get expense dashboard statistics' })
   @ApiResponse({ status: 200, description: 'Dashboard statistics retrieved successfully' })
-  async getDashboardStats(@Query() filters: ExpenseDashboardStatsFiltersDto) {
-    return this.expensesService.getDashboardStats(filters);
+  async getDashboardStats(@Query() filters: ExpenseDashboardStatsFiltersDto, @CurrentUser() user: any) {
+    return this.expensesService.getDashboardStats(filters, user);
   }
 
   @Get(':id')

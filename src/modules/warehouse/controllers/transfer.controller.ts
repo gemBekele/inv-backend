@@ -135,23 +135,23 @@ export class TransferController {
     return this.transferService.approve(id, user);
   }
 
-  @Post(':id/complete')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @Post(':id/accept')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Complete transfer and process inventory movement' })
+  @ApiOperation({ summary: 'Accept delivered transfer and complete inventory movement' })
   @ApiParam({ name: 'id', description: 'Transfer UUID' })
   @ApiResponse({
     status: 200,
-    description: 'Transfer completed successfully',
+    description: 'Transfer accepted and completed successfully',
     type: TransferResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Transfer not found' })
-  @ApiResponse({ status: 400, description: 'Transfer cannot be completed' })
-  async complete(
+  @ApiResponse({ status: 400, description: 'Transfer cannot be accepted' })
+  async accept(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ): Promise<TransferResponseDto> {
-    return this.transferService.complete(id, user);
+    return this.transferService.accept(id, user);
   }
 
   @Post(':id/cancel')
@@ -191,6 +191,25 @@ export class TransferController {
     @CurrentUser() user: User,
   ): Promise<TransferResponseDto> {
     return this.transferService.reject(id, rejectionReason, user);
+  }
+
+  @Post(':id/deliver')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark transfer as delivered' })
+  @ApiParam({ name: 'id', description: 'Transfer UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transfer marked as delivered successfully',
+    type: TransferResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Transfer not found' })
+  @ApiResponse({ status: 400, description: 'Transfer cannot be delivered' })
+  async deliver(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ): Promise<TransferResponseDto> {
+    return this.transferService.deliver(id, user);
   }
 
   @Post('request')

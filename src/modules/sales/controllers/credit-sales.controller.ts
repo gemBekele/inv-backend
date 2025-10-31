@@ -71,6 +71,7 @@ export class CreditSalesController {
     UserRole.COMPANY_ADMIN,
     UserRole.MANAGER,
     UserRole.SHOP_EMPLOYEE,
+    UserRole.USER,
   )
   @ApiOperation({ summary: 'Get all credit sales with pagination and filtering' })
   @ApiResponse({
@@ -112,7 +113,7 @@ export class CreditSalesController {
   }
 
   @Get('stats')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.USER)
   @ApiOperation({ summary: 'Get credit sales statistics' })
   @ApiResponse({
     status: 200,

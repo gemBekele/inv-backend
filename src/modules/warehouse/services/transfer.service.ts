@@ -14,6 +14,7 @@ import { TransferType, TransferStatus } from '../enums/transfer.enums';
 import { UserRole } from '../../../common/enums';
 import { BaseMultiTenantService } from '../../../common/services/base-multi-tenant.service';
 import { PaginatedResult } from '../../../common/interfaces';
+import { LocationService } from './location.service';
 
 @Injectable()
 export class TransferService extends BaseMultiTenantService {
@@ -34,27 +35,58 @@ export class TransferService extends BaseMultiTenantService {
     private readonly warehouseProductRepository: Repository<WarehouseProduct>,
     @InjectRepository(ShopProduct)
     private readonly shopProductRepository: Repository<ShopProduct>,
+    private readonly locationService: LocationService,
   ) {
     super();
   }
 
   async create(createTransferDto: CreateTransferDto, user: User): Promise<TransferResponseDto> {
-    // Validate transfer type and locations
-    await this.validateTransferLocations(createTransferDto, user);
+    // Validate locations and access
+    const sourceLocation = await this.locationService.validateLocationAccess(
+      createTransferDto.sourceLocationId,
+      createTransferDto.sourceLocationType,
+      user
+    );
+    
+    const destinationLocation = await this.locationService.validateLocationAccess(
+      createTransferDto.destinationLocationId,
+      createTransferDto.destinationLocationType,
+      user
+    );
 
     // Validate inventory availability
-    await this.validateInventoryAvailability(createTransferDto, user);
+    await this.validateInventoryAvailability(createTransferDto, sourceLocation);
+
+    // Determine transfer type based on location types
+    const transferType = this.determineTransferType(sourceLocation.type, destinationLocation.type);
+
+    // Check if user is responsible for both locations (auto-approval)
+    const isUserResponsibleForSource = await this.locationService.isUserResponsibleForLocation(
+      createTransferDto.sourceLocationId,
+      createTransferDto.sourceLocationType,
+      user
+    );
+    
+    const isUserResponsibleForDestination = await this.locationService.isUserResponsibleForLocation(
+      createTransferDto.destinationLocationId,
+      createTransferDto.destinationLocationType,
+      user
+    );
+
+    const shouldAutoApprove = isUserResponsibleForSource && isUserResponsibleForDestination;
 
     // Create transfer
     const transfer = this.transferRepository.create({
-      type: createTransferDto.type,
-      sourceWarehouseId: createTransferDto.sourceWarehouseId,
-      sourceShopId: createTransferDto.sourceShopId,
-      destinationWarehouseId: createTransferDto.destinationWarehouseId,
-      destinationShopId: createTransferDto.destinationShopId,
+      type: transferType,
+      sourceLocationId: createTransferDto.sourceLocationId,
+      sourceLocationType: createTransferDto.sourceLocationType,
+      destinationLocationId: createTransferDto.destinationLocationId,
+      destinationLocationType: createTransferDto.destinationLocationType,
       notes: createTransferDto.notes,
       expectedDate: createTransferDto.expectedDate,
       createdById: user.id,
+      status: shouldAutoApprove ? TransferStatus.APPROVED : TransferStatus.REQUESTED,
+      approvedById: shouldAutoApprove ? user.id : undefined,
     });
 
     const savedTransfer = await this.transferRepository.save(transfer);
@@ -75,7 +107,7 @@ export class TransferService extends BaseMultiTenantService {
 
     // Reload with relations
     const result = await this.findOne(savedTransfer.id, user);
-    this.logger.log(`Transfer ${savedTransfer.transferNumber} created by user ${user.id}`);
+    this.logger.log(`Transfer ${savedTransfer.transferNumber} created by user ${user.id}${shouldAutoApprove ? ' (auto-approved)' : ''}`);
 
     return result;
   }
@@ -91,7 +123,7 @@ export class TransferService extends BaseMultiTenantService {
     const [transfers, total] = await queryBuilder.getManyAndCount();
 
     return {
-      data: transfers.map(transfer => this.mapToResponseDto(transfer)),
+      data: await Promise.all(transfers.map(transfer => this.mapToResponseDto(transfer))),
       total,
       page,
       limit,
@@ -102,16 +134,10 @@ export class TransferService extends BaseMultiTenantService {
   async findOne(id: string, user: User): Promise<TransferResponseDto> {
     const transfer = await this.transferRepository
       .createQueryBuilder('transfer')
-      .leftJoinAndSelect('transfer.sourceWarehouse', 'sourceWarehouse')
-      .leftJoinAndSelect('sourceWarehouse.company', 'sourceWarehouseCompany')
-      .leftJoinAndSelect('transfer.sourceShop', 'sourceShop')
-      .leftJoinAndSelect('sourceShop.company', 'sourceShopCompany')
-      .leftJoinAndSelect('transfer.destinationWarehouse', 'destinationWarehouse')
-      .leftJoinAndSelect('destinationWarehouse.company', 'destinationWarehouseCompany')
-      .leftJoinAndSelect('transfer.destinationShop', 'destinationShop')
-      .leftJoinAndSelect('destinationShop.company', 'destinationShopCompany')
       .leftJoinAndSelect('transfer.createdBy', 'createdBy')
       .leftJoinAndSelect('transfer.approvedBy', 'approvedBy')
+      .leftJoinAndSelect('transfer.deliveredBy', 'deliveredBy')
+      .leftJoinAndSelect('transfer.acceptedBy', 'acceptedBy')
       .leftJoinAndSelect('transfer.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .where('transfer.id = :id', { id })
@@ -122,24 +148,22 @@ export class TransferService extends BaseMultiTenantService {
     }
 
     // Check multi-tenant access
-    if (!this.canAccessTransfer(transfer, user)) {
+    if (!(await this.canAccessTransfer(transfer, user))) {
       throw new ForbiddenException('Access denied to this transfer');
     }
 
-    return this.mapToResponseDto(transfer);
+    return await this.mapToResponseDto(transfer);
   }
 
   async update(id: string, updateTransferDto: UpdateTransferDto, user: User): Promise<TransferResponseDto> {
     const transfer = await this.transferRepository
       .createQueryBuilder('transfer')
-      .leftJoinAndSelect('transfer.sourceWarehouse', 'sourceWarehouse')
-      .leftJoinAndSelect('sourceWarehouse.company', 'sourceWarehouseCompany')
-      .leftJoinAndSelect('transfer.sourceShop', 'sourceShop')
-      .leftJoinAndSelect('sourceShop.company', 'sourceShopCompany')
-      .leftJoinAndSelect('transfer.destinationWarehouse', 'destinationWarehouse')
-      .leftJoinAndSelect('destinationWarehouse.company', 'destinationWarehouseCompany')
-      .leftJoinAndSelect('transfer.destinationShop', 'destinationShop')
-      .leftJoinAndSelect('destinationShop.company', 'destinationShopCompany')
+      .leftJoinAndSelect('transfer.createdBy', 'createdBy')
+      .leftJoinAndSelect('transfer.approvedBy', 'approvedBy')
+      .leftJoinAndSelect('transfer.deliveredBy', 'deliveredBy')
+      .leftJoinAndSelect('transfer.acceptedBy', 'acceptedBy')
+      .leftJoinAndSelect('transfer.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
       .where('transfer.id = :id', { id })
       .getOne();
 
@@ -148,7 +172,7 @@ export class TransferService extends BaseMultiTenantService {
     }
 
     // Check multi-tenant access
-    if (!this.canAccessTransfer(transfer, user)) {
+    if (!(await this.canAccessTransfer(transfer, user))) {
       throw new ForbiddenException('Access denied to this transfer');
     }
 
@@ -186,11 +210,50 @@ export class TransferService extends BaseMultiTenantService {
   }
 
   async approve(id: string, user: User): Promise<TransferResponseDto> {
-    return this.update(id, { status: TransferStatus.IN_TRANSIT }, user);
+    return this.update(id, { status: TransferStatus.APPROVED }, user);
   }
 
-  async complete(id: string, user: User): Promise<TransferResponseDto> {
-    return this.update(id, { status: TransferStatus.COMPLETED }, user);
+  async deliver(id: string, user: User): Promise<TransferResponseDto> {
+    const transfer = await this.transferRepository.findOne({ where: { id } });
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+
+    if (![TransferStatus.APPROVED, TransferStatus.IN_TRANSIT].includes(transfer.status)) {
+      throw new BadRequestException('Transfer cannot be delivered in current status');
+    }
+
+    transfer.status = TransferStatus.DELIVERED;
+    transfer.deliveredDate = new Date();
+    transfer.deliveredById = user.id;
+
+    await this.transferRepository.save(transfer);
+    this.logger.log(`Transfer ${transfer.transferNumber} marked as delivered by user ${user.id}`);
+
+    return this.findOne(id, user);
+  }
+
+  async accept(id: string, user: User): Promise<TransferResponseDto> {
+    const transfer = await this.transferRepository.findOne({ where: { id } });
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+
+    if (transfer.status !== TransferStatus.APPROVED && transfer.status !== TransferStatus.DELIVERED) {
+      throw new BadRequestException('Transfer must be approved or delivered before it can be accepted');
+    }
+
+    // Process inventory movement
+    await this.processInventoryMovement(transfer);
+
+    transfer.status = TransferStatus.ACCEPTED;
+    transfer.acceptedDate = new Date();
+    transfer.acceptedById = user.id;
+
+    await this.transferRepository.save(transfer);
+    this.logger.log(`Transfer ${transfer.transferNumber} accepted by user ${user.id}`);
+
+    return this.findOne(id, user);
   }
 
   async cancel(id: string, user: User): Promise<TransferResponseDto> {
@@ -210,10 +273,11 @@ export class TransferService extends BaseMultiTenantService {
       if (!user.shopId) {
         throw new BadRequestException('Shop employee must be assigned to a shop');
       }
-      // Force shop-to-warehouse transfer for shop employees
-      createTransferDto.type = TransferType.SHOP_TO_WAREHOUSE;
-      createTransferDto.sourceShopId = user.shopId;
-      createTransferDto.sourceWarehouseId = undefined;
+      // Force external transfer for shop employees
+      createTransferDto.type = TransferType.EXTERNAL;
+      createTransferDto.sourceLocationId = user.shopId;
+      createTransferDto.sourceLocationType = 'shop';
+      createTransferDto.destinationLocationType = 'warehouse';
     } else {
       // For other roles, require type to be specified
       if (!createTransferDto.type) {
@@ -224,51 +288,11 @@ export class TransferService extends BaseMultiTenantService {
     return this.create(createTransferDto, user);
   }
 
-  private async validateTransferLocations(dto: CreateTransferDto, user: User): Promise<void> {
-    const { type, sourceWarehouseId, sourceShopId, destinationWarehouseId, destinationShopId } = dto;
-
-    // Validate source and destination based on transfer type
-    switch (type) {
-      case TransferType.WAREHOUSE_TO_WAREHOUSE:
-        if (!sourceWarehouseId || !destinationWarehouseId) {
-          throw new BadRequestException('Source and destination warehouses are required for warehouse-to-warehouse transfer');
-        }
-        if (sourceWarehouseId === destinationWarehouseId) {
-          throw new BadRequestException('Source and destination warehouses cannot be the same');
-        }
-        await this.validateWarehouseAccess(sourceWarehouseId, user);
-        await this.validateWarehouseAccess(destinationWarehouseId, user);
-        break;
-
-      case TransferType.WAREHOUSE_TO_SHOP:
-        if (!sourceWarehouseId || !destinationShopId) {
-          throw new BadRequestException('Source warehouse and destination shop are required');
-        }
-        await this.validateWarehouseAccess(sourceWarehouseId, user);
-        await this.validateShopAccess(destinationShopId, user);
-        break;
-
-      case TransferType.SHOP_TO_WAREHOUSE:
-        if (!sourceShopId || !destinationWarehouseId) {
-          throw new BadRequestException('Source shop and destination warehouse are required');
-        }
-        await this.validateShopAccess(sourceShopId, user);
-        await this.validateWarehouseAccess(destinationWarehouseId, user);
-        break;
-
-      case TransferType.SHOP_TO_SHOP:
-        if (!sourceShopId || !destinationShopId) {
-          throw new BadRequestException('Source and destination shops are required');
-        }
-        if (sourceShopId === destinationShopId) {
-          throw new BadRequestException('Source and destination shops cannot be the same');
-        }
-        await this.validateShopAccess(sourceShopId, user);
-        await this.validateShopAccess(destinationShopId, user);
-        break;
-
-      default:
-        throw new BadRequestException('Invalid transfer type');
+  private determineTransferType(sourceType: 'warehouse' | 'shop', destinationType: 'warehouse' | 'shop'): TransferType {
+    if (sourceType === destinationType) {
+      return TransferType.INTERNAL;
+    } else {
+      return TransferType.EXTERNAL;
     }
   }
 
@@ -308,7 +332,7 @@ export class TransferService extends BaseMultiTenantService {
     return shop;
   }
 
-  private async validateInventoryAvailability(dto: CreateTransferDto, user: User): Promise<void> {
+  private async validateInventoryAvailability(dto: CreateTransferDto, sourceLocation: any): Promise<void> {
     for (const item of dto.items) {
       const product = await this.productRepository.findOne({ where: { id: item.productId } });
       if (!product) {
@@ -317,22 +341,22 @@ export class TransferService extends BaseMultiTenantService {
 
       let availableStock = 0;
 
-      // Check source inventory based on transfer type
-      if (dto.sourceWarehouseId) {
+      // Check source inventory based on location type
+      if (sourceLocation.type === 'warehouse') {
         const warehouseProduct = await this.warehouseProductRepository
           .createQueryBuilder('wp')
           .innerJoin('wp.warehouse', 'w')
           .innerJoin('wp.product', 'p')
-          .where('w.id = :warehouseId', { warehouseId: dto.sourceWarehouseId })
+          .where('w.id = :warehouseId', { warehouseId: sourceLocation.id })
           .andWhere('p.id = :productId', { productId: item.productId })
           .getOne();
         availableStock = warehouseProduct?.stockQuantity || 0;
-      } else if (dto.sourceShopId) {
+      } else if (sourceLocation.type === 'shop') {
         const shopProduct = await this.shopProductRepository
           .createQueryBuilder('sp')
           .innerJoin('sp.shop', 's')
           .innerJoin('sp.product', 'p')
-          .where('s.id = :shopId', { shopId: dto.sourceShopId })
+          .where('s.id = :shopId', { shopId: sourceLocation.id })
           .andWhere('p.id = :productId', { productId: item.productId })
           .getOne();
         availableStock = shopProduct?.stockQuantity || 0;
@@ -348,8 +372,11 @@ export class TransferService extends BaseMultiTenantService {
 
   private validateStatusTransition(currentStatus: TransferStatus, newStatus: TransferStatus): void {
     const validTransitions: Record<TransferStatus, TransferStatus[]> = {
-      [TransferStatus.PENDING]: [TransferStatus.IN_TRANSIT, TransferStatus.REJECTED, TransferStatus.CANCELLED],
-      [TransferStatus.IN_TRANSIT]: [TransferStatus.COMPLETED, TransferStatus.CANCELLED],
+      [TransferStatus.REQUESTED]: [TransferStatus.APPROVED, TransferStatus.REJECTED, TransferStatus.CANCELLED],
+      [TransferStatus.APPROVED]: [TransferStatus.IN_TRANSIT, TransferStatus.CANCELLED],
+      [TransferStatus.IN_TRANSIT]: [TransferStatus.DELIVERED, TransferStatus.CANCELLED],
+      [TransferStatus.DELIVERED]: [TransferStatus.ACCEPTED, TransferStatus.CANCELLED],
+      [TransferStatus.ACCEPTED]: [TransferStatus.COMPLETED],
       [TransferStatus.COMPLETED]: [],
       [TransferStatus.CANCELLED]: [],
       [TransferStatus.REJECTED]: [],
@@ -375,24 +402,24 @@ export class TransferService extends BaseMultiTenantService {
   }
 
   private async decreaseSourceInventory(transfer: Transfer, item: TransferItem): Promise<void> {
-    if (transfer.sourceWarehouseId) {
+    if (transfer.sourceLocationType === 'warehouse') {
       const warehouseProduct = await this.warehouseProductRepository
         .createQueryBuilder('wp')
         .innerJoin('wp.warehouse', 'w')
         .innerJoin('wp.product', 'p')
-        .where('w.id = :warehouseId', { warehouseId: transfer.sourceWarehouseId })
+        .where('w.id = :warehouseId', { warehouseId: transfer.sourceLocationId })
         .andWhere('p.id = :productId', { productId: item.productId })
         .getOne();
       if (warehouseProduct) {
         warehouseProduct.stockQuantity = Math.max(0, warehouseProduct.stockQuantity - item.quantity);
         await this.warehouseProductRepository.save(warehouseProduct);
       }
-    } else if (transfer.sourceShopId) {
+    } else if (transfer.sourceLocationType === 'shop') {
       const shopProduct = await this.shopProductRepository
         .createQueryBuilder('sp')
         .innerJoin('sp.shop', 's')
         .innerJoin('sp.product', 'p')
-        .where('s.id = :shopId', { shopId: transfer.sourceShopId })
+        .where('s.id = :shopId', { shopId: transfer.sourceLocationId })
         .andWhere('p.id = :productId', { productId: item.productId })
         .getOne();
       if (shopProduct) {
@@ -403,12 +430,12 @@ export class TransferService extends BaseMultiTenantService {
   }
 
   private async increaseDestinationInventory(transfer: Transfer, item: TransferItem): Promise<void> {
-    if (transfer.destinationWarehouseId) {
+    if (transfer.destinationLocationType === 'warehouse') {
       let warehouseProduct = await this.warehouseProductRepository
         .createQueryBuilder('wp')
         .innerJoin('wp.warehouse', 'w')
         .innerJoin('wp.product', 'p')
-        .where('w.id = :warehouseId', { warehouseId: transfer.destinationWarehouseId })
+        .where('w.id = :warehouseId', { warehouseId: transfer.destinationLocationId })
         .andWhere('p.id = :productId', { productId: item.productId })
         .getOne();
       
@@ -416,19 +443,19 @@ export class TransferService extends BaseMultiTenantService {
         warehouseProduct.stockQuantity += item.quantity;
       } else {
         warehouseProduct = this.warehouseProductRepository.create({
-          warehouse: { id: transfer.destinationWarehouseId } as Warehouse,
+          warehouse: { id: transfer.destinationLocationId } as Warehouse,
           product: { id: item.productId } as Product,
           stockQuantity: item.quantity,
           minStockLevel: 0,
         });
       }
       await this.warehouseProductRepository.save(warehouseProduct);
-    } else if (transfer.destinationShopId) {
+    } else if (transfer.destinationLocationType === 'shop') {
       let shopProduct = await this.shopProductRepository
         .createQueryBuilder('sp')
         .innerJoin('sp.shop', 's')
         .innerJoin('sp.product', 'p')
-        .where('s.id = :shopId', { shopId: transfer.destinationShopId })
+        .where('s.id = :shopId', { shopId: transfer.destinationLocationId })
         .andWhere('p.id = :productId', { productId: item.productId })
         .getOne();
       
@@ -436,7 +463,7 @@ export class TransferService extends BaseMultiTenantService {
         shopProduct.stockQuantity += item.quantity;
       } else {
         shopProduct = this.shopProductRepository.create({
-          shop: { id: transfer.destinationShopId } as Shop,
+          shop: { id: transfer.destinationLocationId } as Shop,
           product: { id: item.productId } as Product,
           stockQuantity: item.quantity,
           minStockLevel: 0,
@@ -448,24 +475,15 @@ export class TransferService extends BaseMultiTenantService {
 
   private createQueryBuilder(user: User): SelectQueryBuilder<Transfer> {
     const queryBuilder = this.transferRepository.createQueryBuilder('transfer')
-      .leftJoinAndSelect('transfer.sourceWarehouse', 'sourceWarehouse')
-      .leftJoinAndSelect('transfer.sourceShop', 'sourceShop')
-      .leftJoinAndSelect('transfer.destinationWarehouse', 'destinationWarehouse')
-      .leftJoinAndSelect('transfer.destinationShop', 'destinationShop')
       .leftJoinAndSelect('transfer.createdBy', 'createdBy')
       .leftJoinAndSelect('transfer.approvedBy', 'approvedBy')
+      .leftJoinAndSelect('transfer.deliveredBy', 'deliveredBy')
+      .leftJoinAndSelect('transfer.acceptedBy', 'acceptedBy')
       .leftJoinAndSelect('transfer.items', 'items')
       .leftJoinAndSelect('items.product', 'product');
 
-    // Apply multi-tenant filtering
-    const userCompanyId = user.company?.id || (user as any).companyId;
-    if (user.role !== UserRole.SUPER_ADMIN && userCompanyId) {
-      queryBuilder.where(
-        '(sourceWarehouse.companyId = :companyId OR sourceShop.companyId = :companyId OR destinationWarehouse.companyId = :companyId OR destinationShop.companyId = :companyId)',
-        { companyId: userCompanyId }
-      );
-    }
-
+    // Note: Multi-tenant filtering is now handled in the service methods
+    // since we need to check location company IDs dynamically
     return queryBuilder;
   }
 
@@ -478,20 +496,12 @@ export class TransferService extends BaseMultiTenantService {
       queryBuilder.andWhere('transfer.status = :status', { status: query.status });
     }
 
-    if (query.sourceWarehouseId) {
-      queryBuilder.andWhere('transfer.sourceWarehouseId = :sourceWarehouseId', { sourceWarehouseId: query.sourceWarehouseId });
+    if (query.sourceLocationId) {
+      queryBuilder.andWhere('transfer.sourceLocationId = :sourceLocationId', { sourceLocationId: query.sourceLocationId });
     }
 
-    if (query.destinationWarehouseId) {
-      queryBuilder.andWhere('transfer.destinationWarehouseId = :destinationWarehouseId', { destinationWarehouseId: query.destinationWarehouseId });
-    }
-
-    if (query.sourceShopId) {
-      queryBuilder.andWhere('transfer.sourceShopId = :sourceShopId', { sourceShopId: query.sourceShopId });
-    }
-
-    if (query.destinationShopId) {
-      queryBuilder.andWhere('transfer.destinationShopId = :destinationShopId', { destinationShopId: query.destinationShopId });
+    if (query.destinationLocationId) {
+      queryBuilder.andWhere('transfer.destinationLocationId = :destinationLocationId', { destinationLocationId: query.destinationLocationId });
     }
 
     if (query.search) {
@@ -512,7 +522,7 @@ export class TransferService extends BaseMultiTenantService {
     queryBuilder.orderBy('transfer.createdAt', 'DESC');
   }
 
-  private canAccessTransfer(transfer: Transfer, user: User): boolean {
+  private async canAccessTransfer(transfer: Transfer, user: User): Promise<boolean> {
     if (user.role === UserRole.SUPER_ADMIN) {
       return true;
     }
@@ -523,28 +533,44 @@ export class TransferService extends BaseMultiTenantService {
       return false;
     }
 
+    // Get location details to check company access
+    const sourceLocation = await this.locationService.getLocationInfo(
+      transfer.sourceLocationId, 
+      transfer.sourceLocationType
+    );
+    const destinationLocation = await this.locationService.getLocationInfo(
+      transfer.destinationLocationId, 
+      transfer.destinationLocationType
+    );
+
     return (
-      transfer.sourceWarehouse?.company?.id === userCompanyId ||
-      transfer.sourceShop?.company?.id === userCompanyId ||
-      transfer.destinationWarehouse?.company?.id === userCompanyId ||
-      transfer.destinationShop?.company?.id === userCompanyId
+      sourceLocation?.companyId === userCompanyId ||
+      destinationLocation?.companyId === userCompanyId
     );
   }
 
-  private mapToResponseDto(transfer: Transfer): TransferResponseDto {
+  private async mapToResponseDto(transfer: Transfer): Promise<TransferResponseDto> {
+    // Get location details using the location service
+    const sourceLocation = await this.locationService.getLocationInfo(
+      transfer.sourceLocationId, 
+      transfer.sourceLocationType
+    );
+    const destinationLocation = await this.locationService.getLocationInfo(
+      transfer.destinationLocationId, 
+      transfer.destinationLocationType
+    );
+    
     return {
       id: transfer.id,
       transferNumber: transfer.transferNumber,
       type: transfer.type,
       status: transfer.status,
-      sourceWarehouseName: transfer.sourceWarehouse?.name,
-      sourceWarehouseId: transfer.sourceWarehouseId,
-      sourceShopName: transfer.sourceShop?.name,
-      sourceShopId: transfer.sourceShopId,
-      destinationWarehouseName: transfer.destinationWarehouse?.name,
-      destinationWarehouseId: transfer.destinationWarehouseId,
-      destinationShopName: transfer.destinationShop?.name,
-      destinationShopId: transfer.destinationShopId,
+      sourceLocationName: sourceLocation?.name,
+      sourceLocationId: transfer.sourceLocationId,
+      sourceLocationType: transfer.sourceLocationType,
+      destinationLocationName: destinationLocation?.name,
+      destinationLocationId: transfer.destinationLocationId,
+      destinationLocationType: transfer.destinationLocationType,
       items: transfer.items?.map(item => ({
         id: item.id,
         productId: item.product.id,
@@ -557,10 +583,16 @@ export class TransferService extends BaseMultiTenantService {
       rejectionReason: transfer.rejectionReason,
       expectedDate: transfer.expectedDate,
       completedDate: transfer.completedDate,
+      deliveredDate: transfer.deliveredDate,
+      acceptedDate: transfer.acceptedDate,
       createdByName: `${transfer.createdBy.firstName} ${transfer.createdBy.lastName}`,
       createdById: transfer.createdById,
       approvedByName: transfer.approvedBy ? `${transfer.approvedBy.firstName} ${transfer.approvedBy.lastName}` : undefined,
       approvedById: transfer.approvedById,
+      deliveredByName: transfer.deliveredBy ? `${transfer.deliveredBy.firstName} ${transfer.deliveredBy.lastName}` : undefined,
+      deliveredById: transfer.deliveredById,
+      acceptedByName: transfer.acceptedBy ? `${transfer.acceptedBy.firstName} ${transfer.acceptedBy.lastName}` : undefined,
+      acceptedById: transfer.acceptedById,
       createdAt: transfer.createdAt,
       updatedAt: transfer.updatedAt,
     };

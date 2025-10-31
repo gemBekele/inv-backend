@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PaginationDto } from '@/common/dto';
 import { PaginatedResult } from '@/common/interfaces';
+import { User } from '../users/entities/user.entity';
 import { Expense } from './entities/expense.entity';
 import { ExpenseApproval } from './entities/expense-approval.entity';
 import { ExpenseAttachment } from './entities/expense-attachment.entity';
@@ -331,11 +332,19 @@ export class ExpensesService {
     return await this.expenseAttachmentRepository.save(attachment);
   }
 
-  async getDashboardStats(filters?: { startDate?: Date; endDate?: Date }): Promise<any> {
-    const queryBuilder = this.expenseRepository.createQueryBuilder('expense');
+  async getDashboardStats(filters?: { startDate?: Date; endDate?: Date }, user?: User): Promise<any> {
+    const queryBuilder = this.expenseRepository.createQueryBuilder('expense')
+      .leftJoinAndSelect('expense.company', 'company');
+
+    // Apply company filtering if user is provided
+    if (user) {
+      queryBuilder.andWhere('expense.company.id = :userCompanyId', {
+        userCompanyId: user.company?.id || (user as any).companyId
+      });
+    }
 
     if (filters?.startDate && filters?.endDate) {
-      queryBuilder.where('expense.expenseDate BETWEEN :startDate AND :endDate', {
+      queryBuilder.andWhere('expense.expenseDate BETWEEN :startDate AND :endDate', {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });

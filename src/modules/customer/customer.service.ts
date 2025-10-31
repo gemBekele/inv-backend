@@ -252,8 +252,18 @@ export class CustomerService extends BaseMultiTenantService {
     return this.mapToResponseDto(updatedCustomer);
   }
 
-  async getCreditStats(): Promise<CreditStatsResponseDto> {
-    const allCustomers = await this.customerRepository.find();
+  async getCreditStats(user: User): Promise<CreditStatsResponseDto> {
+    const queryBuilder = this.customerRepository.createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.company', 'company');
+
+    // Apply company filtering if user is provided
+    if (user) {
+      queryBuilder.andWhere('customer.company.id = :userCompanyId', {
+        userCompanyId: user.company?.id || (user as any).companyId
+      });
+    }
+
+    const allCustomers = await queryBuilder.getMany();
 
     const creditCustomers = allCustomers.filter(c => c.creditLimit > 0);
     const approvedCreditCustomers = creditCustomers.filter(c => c.isCreditApproved);

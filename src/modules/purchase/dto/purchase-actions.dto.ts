@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ExpenseApprovalLevel } from '../../expenses/enums';
+import { PaymentType } from '../../sales/enums/sales.enums';
 
 export class PurchaseOrderApprovalDto {
   @ApiPropertyOptional({ description: 'Approval notes' })
@@ -120,14 +121,28 @@ export class CreatePaymentDto {
   @IsDate()
   paymentDate: Date;
 
-  @ApiProperty({ description: 'Payment method ID' })
-  @IsUUID()
-  paymentMethodId: string;
+  @ApiProperty({ 
+    description: 'Payment method',
+    enum: PaymentType,
+    example: PaymentType.CASH
+  })
+  @IsEnum(PaymentType)
+  paymentMethod: PaymentType;
 
   @ApiPropertyOptional({ description: 'Reference number (check number, transaction ID, etc.)' })
   @IsOptional()
   @IsString()
   referenceNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Check number (for cheque payments)' })
+  @IsOptional()
+  @IsString()
+  checkNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Bank account (for bank transfer payments)' })
+  @IsOptional()
+  @IsString()
+  bankAccount?: string;
 
   @ApiPropertyOptional({ description: 'Payment notes' })
   @IsOptional()

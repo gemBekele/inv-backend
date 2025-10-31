@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
 import { Credit, CreditPayment, CreditTransaction } from './entities';
 import { CreateCreditDto, UpdateCreditDto, CreateCreditPaymentDto, CreditQueryDto, CreditResponseDto, CreditPaymentResponseDto, CreditTransactionResponseDto, CreditStatsResponseDto } from './dto';
 import { CreditStatus, PaymentStatus, TransactionType } from './enums';
@@ -8,6 +9,8 @@ import { User } from '../users/entities/user.entity';
 import { Customer } from '../customer/entities/customer.entity';
 import { BaseMultiTenantService } from '../../common/services/base-multi-tenant.service';
 import { UserRole } from '../../common/enums';
+import { Sales } from '../sales/entities/sales.entity';
+import { SaleStatus } from '../sales/enums';
 
 @Injectable()
 export class CreditService extends BaseMultiTenantService {
@@ -20,6 +23,8 @@ export class CreditService extends BaseMultiTenantService {
     private transactionRepository: Repository<CreditTransaction>,
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
+    @InjectRepository(Sales)
+    private salesRepository: Repository<Sales>,
   ) {
     super();
   }
@@ -122,6 +127,33 @@ export class CreditService extends BaseMultiTenantService {
     return credit;
   }
 
+  async findOneWithRelations(id: string, user: User): Promise<Credit> {
+    const queryBuilder = this.creditRepository
+      .createQueryBuilder('credit')
+      .leftJoinAndSelect('credit.customer', 'customer')
+      .leftJoinAndSelect('credit.createdBy', 'createdBy')
+      .leftJoinAndSelect('credit.approvedBy', 'approvedBy')
+      .leftJoinAndSelect('credit.payments', 'payments')
+      .leftJoinAndSelect('payments.processedBy', 'processedBy')
+      .leftJoinAndSelect('credit.transactions', 'transactions')
+      .where('credit.id = :id', { id });
+
+    // Apply multi-tenant filtering
+    this.applyCompanyFilter(queryBuilder, {
+      id: user.id,
+      role: user.role,
+      companyId: user.company?.id || (user as any).companyId
+    }, 'credit');
+
+    const credit = await queryBuilder.getOne();
+
+    if (!credit) {
+      throw new NotFoundException('Credit not found');
+    }
+
+    return credit;
+  }
+
   async update(id: string, updateCreditDto: UpdateCreditDto, user: User): Promise<CreditResponseDto> {
     const credit = await this.findOneEntity(id, user);
 
@@ -161,68 +193,209 @@ export class CreditService extends BaseMultiTenantService {
     return this.transformCreditToResponse(approvedCredit);
   }
 
-  async createPayment(creditId: string, createPaymentDto: CreateCreditPaymentDto, user: User): Promise<CreditPaymentResponseDto> {
-    const credit = await this.findOneEntity(creditId, user);
+  async createPayment(creditId: string, createPaymentDto: CreateCreditPaymentDto, user: User): Promise<any> {
+    // Validate credit exists and has remaining balance
+    const credit = await this.creditRepository
+      .createQueryBuilder('credit')
+      .where('credit.id = :creditId', { creditId })
+      .andWhere('credit.companyId = :companyId', { companyId: user.company?.id || (user as any).companyId })
+      .getOne();
 
-    if (credit.isFullyPaid) {
+    if (!credit) {
+      throw new NotFoundException('Credit not found');
+    }
+
+    const remainingBalance = Number(credit.remainingBalance);
+    if (remainingBalance <= 0 || credit.status === CreditStatus.FULLY_PAID) {
       throw new BadRequestException('Credit is already fully paid');
     }
 
-    if (createPaymentDto.amount > credit.remainingBalance) {
-      throw new BadRequestException('Payment amount exceeds remaining balance');
+    if (createPaymentDto.amount > remainingBalance) {
+      throw new BadRequestException(`Payment amount cannot exceed remaining balance of ${remainingBalance}`);
     }
 
-    const payment = this.paymentRepository.create({
-      ...createPaymentDto,
-      creditId: credit.id,
-      processedById: user.id,
-      paymentDate: createPaymentDto.paymentDate ? new Date(createPaymentDto.paymentDate) : new Date(),
-      status: PaymentStatus.COMPLETED,
-    });
-
-    const remainingAmount = createPaymentDto.amount;
-    payment.principalAmount = Math.min(remainingAmount, credit.remainingBalance);
+    // Create payment using entity (simpler approach)
+    const paymentDate = createPaymentDto.paymentDate ? new Date(createPaymentDto.paymentDate) : new Date();
+    
+    const payment = new CreditPayment();
+    payment.amount = createPaymentDto.amount;
+    payment.principalAmount = createPaymentDto.amount;
     payment.interestAmount = 0;
     payment.feesAmount = 0;
+    payment.paymentDate = paymentDate;
+    payment.status = PaymentStatus.COMPLETED;
+    payment.paymentMethod = createPaymentDto.paymentMethod;
+    payment.transactionReference = createPaymentDto.transactionReference || null;
+    payment.notes = createPaymentDto.notes || null;
+    payment.metadata = createPaymentDto.metadata || null;
+    payment.creditId = creditId;
+    payment.processedById = user.id;
+    // paymentNumber will be auto-generated by @BeforeInsert hook
 
     const savedPayment = await this.paymentRepository.save(payment);
 
-    credit.paidAmount += payment.amount;
-    credit.remainingBalance -= payment.principalAmount;
+    // Update credit
+    const newPaidAmount = Number(credit.paidAmount) + createPaymentDto.amount;
+    const newRemainingBalance = remainingBalance - createPaymentDto.amount;
+    const newStatus = newRemainingBalance <= 0 ? CreditStatus.FULLY_PAID : CreditStatus.PARTIALLY_PAID;
 
-    if (credit.remainingBalance <= 0) {
-      credit.status = CreditStatus.FULLY_PAID;
-      credit.remainingBalance = 0;
-    } else if (credit.paidAmount > 0) {
-      credit.status = CreditStatus.PARTIALLY_PAID;
+    await this.creditRepository
+      .createQueryBuilder()
+      .update(Credit)
+      .set({
+        paidAmount: newPaidAmount,
+        remainingBalance: Math.max(0, newRemainingBalance),
+        status: newStatus,
+      })
+      .where('id = :creditId', { creditId })
+      .execute();
+
+    // Update associated sale if credit was created from a sale
+    if (credit.metadata?.saleId) {
+      try {
+        const sale = await this.salesRepository.findOne({
+          where: { id: credit.metadata.saleId }
+        });
+        
+        if (sale) {
+          // Update sale's remaining balance to match credit's remaining balance
+          // This ensures the sale status reflects the actual payment status
+          const updatedSaleRemainingBalance = Math.max(0, newRemainingBalance);
+          const saleTotalAmount = Number(sale.totalAmount);
+          
+          // Determine new status based on payment progress
+          let newSaleStatus: SaleStatus;
+          
+          if (updatedSaleRemainingBalance <= 0) {
+            // Fully paid - mark as completed
+            newSaleStatus = SaleStatus.COMPLETED;
+          } else if (updatedSaleRemainingBalance < saleTotalAmount) {
+            // Has remaining balance but less than total amount - partially paid
+            newSaleStatus = SaleStatus.PARTIALLY_PAID;
+          } else {
+            // Remaining balance equals or exceeds total (shouldn't happen, but keep current status)
+            newSaleStatus = sale.status;
+          }
+          
+          await this.salesRepository
+            .createQueryBuilder()
+            .update(Sales)
+            .set({
+              remainingBalance: updatedSaleRemainingBalance,
+              status: newSaleStatus,
+            })
+            .where('id = :saleId', { saleId: credit.metadata.saleId })
+            .execute();
+        }
+      } catch (err) {
+        // Log error but don't fail the payment creation
+        console.error('Failed to update sale status after credit payment:', err);
+      }
     }
 
-    await this.creditRepository.save(credit);
-
-    await this.createTransaction({
-      creditId: credit.id,
-      type: TransactionType.PAYMENT_RECEIVED,
-      amount: payment.amount,
-      balanceAfter: credit.remainingBalance,
-      description: `Payment ${payment.paymentNumber} received`,
-      referenceId: payment.id,
-      processedById: user.id,
+    // Create transaction log asynchronously
+    setImmediate(async () => {
+      try {
+        const transaction = new CreditTransaction();
+        transaction.type = TransactionType.PAYMENT_RECEIVED;
+        transaction.amount = createPaymentDto.amount;
+        transaction.balanceAfter = Math.max(0, newRemainingBalance);
+        transaction.description = `Payment ${savedPayment.paymentNumber} received`;
+        transaction.referenceId = savedPayment.id;
+        transaction.creditId = creditId;
+        transaction.processedById = user.id;
+        transaction.transactionDate = new Date();
+        await this.transactionRepository.save(transaction);
+      } catch (err) {
+        console.error('Transaction log creation failed:', err);
+      }
     });
 
-    const fullPayment = await this.findPaymentEntity(savedPayment.id, user);
-    return this.transformPaymentToResponse(fullPayment);
+    // Return plain object to avoid serialization issues
+    const responseObj = {
+      id: savedPayment.id,
+      paymentNumber: savedPayment.paymentNumber,
+      amount: createPaymentDto.amount,
+      principalAmount: createPaymentDto.amount,
+      interestAmount: 0,
+      feesAmount: 0,
+      paymentDate: paymentDate.toISOString().split('T')[0],
+      status: PaymentStatus.COMPLETED,
+      paymentMethod: createPaymentDto.paymentMethod,
+      transactionReference: createPaymentDto.transactionReference,
+      notes: createPaymentDto.notes,
+      createdAt: new Date().toISOString(),
+      processedBy: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    };
+
+    // Convert to JSON and back to ensure it's a plain object
+    return JSON.parse(JSON.stringify(responseObj));
   }
 
-  async findPayments(creditId: string, user: User): Promise<CreditPaymentResponseDto[]> {
-    await this.findOneEntity(creditId, user);
+  async findPayments(creditId: string, user: User): Promise<any[]> {
+    // Validate credit exists
+    const credit = await this.creditRepository
+      .createQueryBuilder('credit')
+      .where('credit.id = :creditId', { creditId })
+      .andWhere('credit.companyId = :companyId', { companyId: user.company?.id || (user as any).companyId })
+      .getOne();
 
-    const payments = await this.paymentRepository.find({
-      where: { creditId },
-      relations: ['processedBy'],
-      order: { paymentDate: 'DESC' },
-    });
+    if (!credit) {
+      throw new NotFoundException('Credit not found');
+    }
 
-    return payments.map(payment => this.transformPaymentToResponse(payment));
+    // Get payments using raw query to avoid serialization issues
+    const payments = await this.paymentRepository.manager.query(`
+      SELECT 
+        p.id,
+        p."paymentNumber",
+        p.amount,
+        p."principalAmount",
+        p."interestAmount",
+        p."feesAmount",
+        p."paymentDate",
+        p.status,
+        p."paymentMethod",
+        p."transactionReference",
+        p.notes,
+        p."createdAt",
+        u.id as "processedById",
+        u."firstName" as "processedByFirstName",
+        u."lastName" as "processedByLastName"
+      FROM credit_payments p
+      LEFT JOIN users u ON p."processedById" = u.id
+      WHERE p."creditId" = $1
+      ORDER BY p."paymentDate" DESC, p."createdAt" DESC
+    `, [creditId]);
+
+    // Transform to response format
+    return payments.map(payment => ({
+      id: payment.id,
+      paymentNumber: payment.paymentNumber,
+      amount: Number(payment.amount),
+      principalAmount: Number(payment.principalAmount),
+      interestAmount: Number(payment.interestAmount),
+      feesAmount: Number(payment.feesAmount),
+      paymentDate: payment.paymentDate instanceof Date 
+        ? payment.paymentDate.toISOString().split('T')[0]
+        : new Date(payment.paymentDate).toISOString().split('T')[0],
+      status: payment.status,
+      paymentMethod: payment.paymentMethod,
+      transactionReference: payment.transactionReference || null,
+      notes: payment.notes || null,
+      createdAt: payment.createdAt instanceof Date 
+        ? payment.createdAt.toISOString()
+        : new Date(payment.createdAt).toISOString(),
+      processedBy: payment.processedById ? {
+        id: payment.processedById,
+        firstName: payment.processedByFirstName,
+        lastName: payment.processedByLastName,
+      } : null,
+    }));
   }
 
   async findPayment(paymentId: string, user: User): Promise<CreditPaymentResponseDto> {
@@ -241,7 +414,7 @@ export class CreditService extends BaseMultiTenantService {
     this.applyCompanyFilter(queryBuilder, {
       id: user.id,
       role: user.role,
-      companyId: user.company?.id
+      companyId: user.company?.id || (user as any).companyId
     }, 'credit');
 
     const payment = await queryBuilder.getOne();
@@ -511,6 +684,7 @@ export class CreditService extends BaseMultiTenantService {
       paymentPercentage: credit.paymentPercentage,
       agingCategory: credit.agingCategory,
       riskLevel: credit.riskLevel,
+      metadata: credit.metadata,
       createdAt: credit.createdAt instanceof Date ? credit.createdAt.toISOString() : new Date(credit.createdAt).toISOString(),
       updatedAt: credit.updatedAt instanceof Date ? credit.updatedAt.toISOString() : new Date(credit.updatedAt).toISOString(),
       customer: credit.customer ? {
@@ -539,12 +713,16 @@ export class CreditService extends BaseMultiTenantService {
       principalAmount: payment.principalAmount,
       interestAmount: payment.interestAmount,
       feesAmount: payment.feesAmount,
-      paymentDate: payment.paymentDate.toISOString().split('T')[0],
+      paymentDate: payment.paymentDate instanceof Date 
+        ? payment.paymentDate.toISOString().split('T')[0]
+        : new Date(payment.paymentDate).toISOString().split('T')[0],
       status: payment.status,
       paymentMethod: payment.paymentMethod,
       transactionReference: payment.transactionReference,
       notes: payment.notes,
-      createdAt: payment.createdAt.toISOString(),
+      createdAt: payment.createdAt instanceof Date 
+        ? payment.createdAt.toISOString()
+        : new Date(payment.createdAt).toISOString(),
       processedBy: payment.processedBy ? {
         id: payment.processedBy.id,
         firstName: payment.processedBy.firstName,
@@ -560,10 +738,14 @@ export class CreditService extends BaseMultiTenantService {
       type: transaction.type,
       amount: transaction.amount,
       balanceAfter: transaction.balanceAfter,
-      transactionDate: transaction.transactionDate.toISOString().split('T')[0],
+      transactionDate: transaction.transactionDate instanceof Date 
+        ? transaction.transactionDate.toISOString().split('T')[0]
+        : new Date(transaction.transactionDate).toISOString().split('T')[0],
       description: transaction.description,
       referenceId: transaction.referenceId,
-      createdAt: transaction.createdAt.toISOString(),
+      createdAt: transaction.createdAt instanceof Date 
+        ? transaction.createdAt.toISOString()
+        : new Date(transaction.createdAt).toISOString(),
       processedBy: transaction.processedBy ? {
         id: transaction.processedBy.id,
         firstName: transaction.processedBy.firstName,

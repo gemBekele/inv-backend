@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { ShopsService } from './shops.service';
-import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto } from './dto';
+import { CreateShopDto, UpdateShopDto, ShopQueryDto, ShopResponseDto, ShopDetailResponseDto } from './dto';
 import { AttachProductDto } from './dto/attach-product.dto';
 import { PaginatedResult } from '@/common/interfaces';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
@@ -25,6 +25,25 @@ export class ShopsController {
     return this.shopService.create(createShopDto, user);
   }
 
+  @Get('with-products')
+  @ApiOperation({
+    summary: 'Get all shops with product details and pagination',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'List of shops with products',
+    type: [ShopDetailResponseDto],
+  })
+  async findAllWithProducts(
+    @Query() query: ShopQueryDto,
+    @CurrentUser() user: User
+  ): Promise<PaginatedResult<ShopDetailResponseDto>> {
+    return this.shopService.findAllWithProducts(query, user);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all shops with filtering' })
   @ApiQuery({ name: 'search', required: false, type: String })
@@ -34,11 +53,36 @@ export class ShopsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a shop by ID' })
-  @ApiResponse({ status: 200, description: 'Shop details', type: ShopResponseDto })
+  @ApiOperation({ summary: 'Get a shop by ID with attached products' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search term for filtering products' })
+  @ApiResponse({
+    status: 200,
+    description: 'Shop details',
+    type: ShopDetailResponseDto,
+  })
   @ApiResponse({ status: 404, description: 'Shop not found' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User): Promise<ShopResponseDto> {
-    return this.shopService.findOne(id, user);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: ShopQueryDto,
+    @CurrentUser() user: User
+  ): Promise<ShopDetailResponseDto> {
+    return this.shopService.findOne(id, query, user);
+  }
+
+  @Get(':id/products/:productId')
+  @ApiOperation({ summary: 'Get a specific product of a shop by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Product details for this shop',
+    type: ShopDetailResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Shop or product not found' })
+  async getProductOfShop(
+    @Param('id', ParseUUIDPipe) shopId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @CurrentUser() user: User
+  ) {
+    return this.shopService.findProductOfShop(shopId, productId, user);
   }
 
   @Put(':id')

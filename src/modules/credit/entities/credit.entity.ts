@@ -108,10 +108,10 @@ export class Credit extends BaseEntity {
   @JoinColumn({ name: 'approvedById' })
   approvedBy?: User;
 
-  @OneToMany(() => CreditPayment, payment => payment.credit)
+  @OneToMany(() => CreditPayment, payment => payment.credit, { cascade: false })
   payments: CreditPayment[];
 
-  @OneToMany(() => CreditTransaction, transaction => transaction.credit)
+  @OneToMany(() => CreditTransaction, transaction => transaction.credit, { cascade: false })
   transactions: CreditTransaction[];
 
   @BeforeInsert()

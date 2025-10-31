@@ -54,8 +54,9 @@ export class CompanyController {
   })
   async create(
     @Body() createCompanyDto: CreateCompanyDto,
+    @CurrentUser() user: User
   ): Promise<CompanyResponseDto> {
-    return this.companyService.create(createCompanyDto);
+    return this.companyService.create(createCompanyDto, user);
   }
 
   @Post(':id/warehouses')

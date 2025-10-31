@@ -216,24 +216,30 @@ export class ReportsController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
   @ApiOperation({ summary: 'Generate dashboard summary with key metrics' })
   @ApiResponse({ status: 200, description: 'Dashboard summary' })
-  async getDashboardSummary(@Query() query: BaseReportQueryDto) {
-    // Aggregate multiple reports for dashboard
-    const [
-      inventoryReport,
-      salesReport,
-      expenseReport
-    ] = await Promise.all([
-      this.reportsService.getInventoryReport(query as InventoryReportQueryDto),
-      this.reportsService.getSalesReport(query as SalesReportQueryDto),
-      this.reportsService.getExpenseReport(query as ExpenseReportQueryDto)
+  async getDashboardSummary(@Query() query: BaseReportQueryDto, @CurrentUser() user: User) {
+    // Build a new scoped query object rather than mutating the DTO instance
+    const userCompanyId = (user as any)?.company?.id || (user as any)?.companyId;
+    const scopedQuery: BaseReportQueryDto = {
+      ...query,
+      companyId:
+        user?.role !== UserRole.SUPER_ADMIN
+          ? (userCompanyId || query.companyId)
+          : (query.companyId || undefined),
+    };
+
+    // Aggregate multiple reports for dashboard with scoped company
+    const [inventoryReport, salesReport, expenseReport] = await Promise.all([
+      this.reportsService.getInventoryReport(scopedQuery as InventoryReportQueryDto),
+      this.reportsService.getSalesReport(scopedQuery as SalesReportQueryDto),
+      this.reportsService.getExpenseReport(scopedQuery as ExpenseReportQueryDto),
     ]);
 
     return {
       metadata: {
         generatedAt: new Date(),
-        periodStart: new Date(query.startDate || new Date()),
-        periodEnd: new Date(query.endDate || new Date()),
-        filters: query
+        periodStart: new Date(scopedQuery.startDate || new Date()),
+        periodEnd: new Date(scopedQuery.endDate || new Date()),
+        filters: scopedQuery,
       },
       inventory: {
         totalProducts: inventoryReport.summary.totalProducts,

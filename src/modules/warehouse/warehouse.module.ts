@@ -6,6 +6,7 @@ import { Transfer } from './entities/transfer.entity';
 import { TransferItem } from './entities/transfer-item.entity';
 import { WarehouseService } from './services/warehouse.service';
 import { TransferService } from './services/transfer.service';
+import { LocationService } from './services/location.service';
 import { WarehouseController } from './controllers/warehouse.controller';
 import { TransferController } from './controllers/transfer.controller';
 import { Product } from '../products/entities/product.entity';
@@ -29,7 +30,7 @@ import { User } from '../users/entities/user.entity';
     ]),
   ],
   controllers: [WarehouseController, TransferController],
-  providers: [WarehouseService, TransferService],
-  exports: [WarehouseService, TransferService, TypeOrmModule],
+  providers: [WarehouseService, TransferService, LocationService],
+  exports: [WarehouseService, TransferService, LocationService, TypeOrmModule],
 })
 export class WarehouseModule {}

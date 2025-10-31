@@ -18,20 +18,20 @@ export class Transfer extends BaseEntity {
   @Column({ type: 'enum', enum: TransferType })
   type: TransferType;
 
-  @Column({ type: 'enum', enum: TransferStatus, default: TransferStatus.PENDING })
+  @Column({ type: 'enum', enum: TransferStatus, default: TransferStatus.REQUESTED })
   status: TransferStatus;
 
-  @Column({ type: 'uuid', nullable: true })
-  sourceWarehouseId?: string;
+  @Column({ type: 'uuid' })
+  sourceLocationId: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  sourceShopId?: string;
+  @Column({ type: 'enum', enum: ['warehouse', 'shop'] })
+  sourceLocationType: 'warehouse' | 'shop';
 
-  @Column({ type: 'uuid', nullable: true })
-  destinationWarehouseId?: string;
+  @Column({ type: 'uuid' })
+  destinationLocationId: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  destinationShopId?: string;
+  @Column({ type: 'enum', enum: ['warehouse', 'shop'] })
+  destinationLocationType: 'warehouse' | 'shop';
 
   @Column({ type: 'text', nullable: true })
   notes?: string;
@@ -45,31 +45,28 @@ export class Transfer extends BaseEntity {
   @Column({ type: 'timestamp', nullable: true })
   completedDate?: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredDate?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  acceptedDate?: Date;
+
   @Column({ type: 'uuid' })
   createdById: string;
 
   @Column({ type: 'uuid', nullable: true })
   approvedById?: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  deliveredById?: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  acceptedById?: string;
+
   @Column({ type: 'json', nullable: true })
   metadata?: Record<string, any>;
 
-  // Relationships
-  @ManyToOne(() => Warehouse, { nullable: true, eager: true })
-  @JoinColumn({ name: 'sourceWarehouseId' })
-  sourceWarehouse?: Warehouse;
-
-  @ManyToOne(() => Shop, { nullable: true, eager: true })
-  @JoinColumn({ name: 'sourceShopId' })
-  sourceShop?: Shop;
-
-  @ManyToOne(() => Warehouse, { nullable: true, eager: true })
-  @JoinColumn({ name: 'destinationWarehouseId' })
-  destinationWarehouse?: Warehouse;
-
-  @ManyToOne(() => Shop, { nullable: true, eager: true })
-  @JoinColumn({ name: 'destinationShopId' })
-  destinationShop?: Shop;
+  // Relationships - removed conflicting relationships since we now use sourceLocationType/destinationLocationType
 
   @ManyToOne(() => User, { eager: true })
   @JoinColumn({ name: 'createdById' })
@@ -78,6 +75,14 @@ export class Transfer extends BaseEntity {
   @ManyToOne(() => User, { nullable: true, eager: true })
   @JoinColumn({ name: 'approvedById' })
   approvedBy?: User;
+
+  @ManyToOne(() => User, { nullable: true, eager: true })
+  @JoinColumn({ name: 'deliveredById' })
+  deliveredBy?: User;
+
+  @ManyToOne(() => User, { nullable: true, eager: true })
+  @JoinColumn({ name: 'acceptedById' })
+  acceptedBy?: User;
 
   @OneToMany(() => TransferItem, item => item.transfer, { eager: true, cascade: true })
   items: TransferItem[];
@@ -96,16 +101,24 @@ export class Transfer extends BaseEntity {
     return this.status === TransferStatus.COMPLETED;
   }
 
-  get isPending(): boolean {
-    return this.status === TransferStatus.PENDING;
+  get isRequested(): boolean {
+    return this.status === TransferStatus.REQUESTED;
   }
 
   get canBeApproved(): boolean {
-    return this.status === TransferStatus.PENDING;
+    return this.status === TransferStatus.REQUESTED;
+  }
+
+  get canBeDelivered(): boolean {
+    return this.status === TransferStatus.APPROVED || this.status === TransferStatus.IN_TRANSIT;
+  }
+
+  get canBeAccepted(): boolean {
+    return this.status === TransferStatus.DELIVERED;
   }
 
   get canBeCancelled(): boolean {
-    return [TransferStatus.PENDING, TransferStatus.IN_TRANSIT].includes(this.status);
+    return [TransferStatus.REQUESTED, TransferStatus.APPROVED, TransferStatus.IN_TRANSIT].includes(this.status);
   }
 
   get totalItems(): number {

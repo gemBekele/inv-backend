@@ -29,25 +29,25 @@ export class CreateTransferDto {
   @IsEnum(TransferType)
   type: TransferType;
 
-  @ApiPropertyOptional({ description: 'Source warehouse ID' })
+  @ApiProperty({ description: 'Source location ID (warehouse or shop)' })
   @IsUUID()
-  @IsOptional()
-  sourceWarehouseId?: string;
+  @IsNotEmpty()
+  sourceLocationId: string;
 
-  @ApiPropertyOptional({ description: 'Source shop ID' })
+  @ApiProperty({ description: 'Destination location ID (warehouse or shop)' })
   @IsUUID()
-  @IsOptional()
-  sourceShopId?: string;
+  @IsNotEmpty()
+  destinationLocationId: string;
 
-  @ApiPropertyOptional({ description: 'Destination warehouse ID' })
-  @IsUUID()
-  @IsOptional()
-  destinationWarehouseId?: string;
+  @ApiProperty({ description: 'Source location type' })
+  @IsEnum(['warehouse', 'shop'])
+  @IsNotEmpty()
+  sourceLocationType: 'warehouse' | 'shop';
 
-  @ApiPropertyOptional({ description: 'Destination shop ID' })
-  @IsUUID()
-  @IsOptional()
-  destinationShopId?: string;
+  @ApiProperty({ description: 'Destination location type' })
+  @IsEnum(['warehouse', 'shop'])
+  @IsNotEmpty()
+  destinationLocationType: 'warehouse' | 'shop';
 
   @ApiProperty({ 
     description: 'Items to transfer',
@@ -126,29 +126,23 @@ export class TransferResponseDto {
   })
   status: TransferStatus;
 
-  @ApiProperty({ description: 'Source warehouse name' })
-  sourceWarehouseName?: string;
+  @ApiProperty({ description: 'Source location name' })
+  sourceLocationName?: string;
 
-  @ApiProperty({ description: 'Source warehouse ID' })
-  sourceWarehouseId?: string;
+  @ApiProperty({ description: 'Source location ID' })
+  sourceLocationId?: string;
 
-  @ApiProperty({ description: 'Source shop name' })
-  sourceShopName?: string;
+  @ApiProperty({ description: 'Source location type' })
+  sourceLocationType?: string;
 
-  @ApiProperty({ description: 'Source shop ID' })
-  sourceShopId?: string;
+  @ApiProperty({ description: 'Destination location name' })
+  destinationLocationName?: string;
 
-  @ApiProperty({ description: 'Destination warehouse name' })
-  destinationWarehouseName?: string;
+  @ApiProperty({ description: 'Destination location ID' })
+  destinationLocationId?: string;
 
-  @ApiProperty({ description: 'Destination warehouse ID' })
-  destinationWarehouseId?: string;
-
-  @ApiProperty({ description: 'Destination shop name' })
-  destinationShopName?: string;
-
-  @ApiProperty({ description: 'Destination shop ID' })
-  destinationShopId?: string;
+  @ApiProperty({ description: 'Destination location type' })
+  destinationLocationType?: string;
 
   @ApiProperty({ 
     description: 'Transfer items',
@@ -168,6 +162,12 @@ export class TransferResponseDto {
   @ApiProperty({ description: 'Actual completion date' })
   completedDate?: Date;
 
+  @ApiProperty({ description: 'Delivery date' })
+  deliveredDate?: Date;
+
+  @ApiProperty({ description: 'Acceptance date' })
+  acceptedDate?: Date;
+
   @ApiProperty({ description: 'Created by user name' })
   createdByName: string;
 
@@ -179,6 +179,18 @@ export class TransferResponseDto {
 
   @ApiProperty({ description: 'Approved by user ID' })
   approvedById?: string;
+
+  @ApiProperty({ description: 'Delivered by user name' })
+  deliveredByName?: string;
+
+  @ApiProperty({ description: 'Delivered by user ID' })
+  deliveredById?: string;
+
+  @ApiProperty({ description: 'Accepted by user name' })
+  acceptedByName?: string;
+
+  @ApiProperty({ description: 'Accepted by user ID' })
+  acceptedById?: string;
 
   @ApiProperty({ description: 'Creation date' })
   createdAt: Date;
@@ -204,25 +216,15 @@ export class TransferQueryDto extends PaginationDto {
   @IsOptional()
   status?: TransferStatus;
 
-  @ApiPropertyOptional({ description: 'Filter by source warehouse ID' })
+  @ApiPropertyOptional({ description: 'Filter by source location ID' })
   @IsUUID()
   @IsOptional()
-  sourceWarehouseId?: string;
+  sourceLocationId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by destination warehouse ID' })
+  @ApiPropertyOptional({ description: 'Filter by destination location ID' })
   @IsUUID()
   @IsOptional()
-  destinationWarehouseId?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by source shop ID' })
-  @IsUUID()
-  @IsOptional()
-  sourceShopId?: string;
-
-  @ApiPropertyOptional({ description: 'Filter by destination shop ID' })
-  @IsUUID()
-  @IsOptional()
-  destinationShopId?: string;
+  destinationLocationId?: string;
 
   @ApiPropertyOptional({ description: 'Search by transfer number or notes' })
   @IsString()

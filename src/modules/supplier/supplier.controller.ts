@@ -31,7 +31,7 @@ import {
 } from './dto/supplier.dto';
 import { PaginatedResult } from '../../common/interfaces/paginated-result.interface';
 import { JwtAuthGuard, RolesGuard } from '../../common/guards';
-import { Roles } from '../../common/decorators';
+import { Roles, CurrentUser } from '../../common/decorators';
 import { UserRole } from '../../common/enums';
 import { SupplierStatus } from './enums/supplier-status.enum';
 
@@ -65,6 +65,7 @@ export class SupplierController {
   }
 
   @Get()
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
   @ApiOperation({ summary: 'Get all suppliers with filtering and pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page' })
@@ -78,7 +79,11 @@ export class SupplierController {
     type: SupplierResponseDto,
     isArray: true,
   })
-  async findAll(@Query() query: SupplierQueryDto): Promise<PaginatedResult<SupplierResponseDto>> {
+  async findAll(@Query() query: SupplierQueryDto, @CurrentUser() user: any): Promise<PaginatedResult<SupplierResponseDto>> {
+    // Add company filtering for non-super-admin users
+    if (user.role !== UserRole.SUPER_ADMIN) {
+      query.companyId = user.company?.id || (user as any).companyId;
+    }
     return this.supplierService.findAll(query);
   }
 

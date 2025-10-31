@@ -178,8 +178,8 @@ export class CustomerController {
   @Get('credit/stats')
   @ApiOperation({ summary: 'Get credit statistics across all customers' })
   @ApiResponse({ status: 200, description: 'Credit statistics retrieved successfully', type: CreditStatsResponseDto })
-  async getCreditStats(): Promise<CreditStatsResponseDto> {
-    return this.customerService.getCreditStats();
+  async getCreditStats(@CurrentUser() user: User): Promise<CreditStatsResponseDto> {
+    return this.customerService.getCreditStats(user);
   }
 
   @Get('credit/eligible')

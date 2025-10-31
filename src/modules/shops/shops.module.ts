@@ -12,6 +12,7 @@ import { CacheService } from '@/shared/cache/cache.service';
 @Module({
   imports: [TypeOrmModule.forFeature([Shop, ShopProduct, Product, Warehouse, Company])],
   controllers: [ShopsController],
-  providers: [ShopsService, CacheService]
+  providers: [ShopsService, CacheService],
+  exports: [ShopsService, TypeOrmModule],
 })
 export class ShopsModule {}

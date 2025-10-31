@@ -9,9 +9,13 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CreditService } from './credit.service';
+import { CreditPdfService } from './services/credit-pdf.service';
 import {
   CreateCreditDto,
   UpdateCreditDto,
@@ -34,7 +38,10 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 @Controller('credits')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CreditController {
-  constructor(private readonly creditService: CreditService) {}
+  constructor(
+    private readonly creditService: CreditService,
+    private readonly creditPdfService: CreditPdfService,
+  ) {}
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
@@ -51,7 +58,7 @@ export class CreditController {
   }
 
   @Get()
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
   @ApiOperation({ summary: 'Get all credits with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'Credits retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -63,7 +70,7 @@ export class CreditController {
   }
 
   @Get('stats')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.USER)
   @ApiOperation({ summary: 'Get credit statistics and analytics' })
   @ApiResponse({ status: 200, description: 'Credit stats retrieved successfully', type: CreditStatsResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -117,31 +124,33 @@ export class CreditController {
   }
 
   @Post(':id/payments')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
   @ApiOperation({ summary: 'Create payment for credit' })
-  @ApiResponse({ status: 201, description: 'Payment created successfully', type: CreditPaymentResponseDto })
+  @ApiResponse({ status: 201, description: 'Payment created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Credit not found' })
   async createPayment(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body() createPaymentDto: CreateCreditPaymentDto,
     @CurrentUser() user: User,
-  ): Promise<CreditPaymentResponseDto> {
-    return this.creditService.createPayment(id, createPaymentDto, user);
+  ) {
+    const result = await this.creditService.createPayment(id, createPaymentDto, user);
+    return result;
   }
 
   @Get(':id/payments')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
   @ApiOperation({ summary: 'Get all payments for credit' })
-  @ApiResponse({ status: 200, description: 'Payments retrieved successfully', type: [CreditPaymentResponseDto] })
+  @ApiResponse({ status: 200, description: 'Payments retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Credit not found' })
   async findPayments(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @CurrentUser() user: User,
-  ): Promise<CreditPaymentResponseDto[]> {
-    return this.creditService.findPayments(id, user);
+  ) {
+    const result = await this.creditService.findPayments(id, user);
+    return result;
   }
 
   @Get(':id/transactions')
@@ -184,5 +193,58 @@ export class CreditController {
   ): Promise<{ message: string }> {
     await this.creditService.remove(id, user);
     return { message: 'Credit deleted successfully' };
+  }
+
+  @Get(':creditId/payments/:paymentId/receipt/pdf')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
+  @ApiOperation({ summary: 'Generate PDF receipt for a credit payment' })
+  @ApiResponse({ status: 200, description: 'PDF receipt generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Credit or payment not found' })
+  async generatePaymentReceiptPdf(
+    @Param('creditId', ParseUUIDPipe) creditId: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const credit = await this.creditService.findOneWithRelations(creditId, user);
+    const payment = credit.payments?.find(p => p.id === paymentId);
+
+    if (!payment) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'Payment not found',
+        timestamp: new Date().toISOString() 
+      });
+      return;
+    }
+
+    const pdfBuffer = await this.creditPdfService.generatePaymentReceipt(credit, payment);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=payment-receipt-${payment.paymentNumber}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  }
+
+  @Get(':id/statement/pdf')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.MANAGER, UserRole.SHOP_EMPLOYEE, UserRole.USER)
+  @ApiOperation({ summary: 'Generate PDF statement for a credit' })
+  @ApiResponse({ status: 200, description: 'PDF statement generated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Credit not found' })
+  async generateCreditStatementPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+    @Res() res: Response,
+  ): Promise<void> {
+    const credit = await this.creditService.findOneWithRelations(id, user);
+
+    const pdfBuffer = await this.creditPdfService.generateCreditStatement(credit);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=credit-statement-${credit.creditNumber}.pdf`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
   }
 }

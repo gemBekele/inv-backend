@@ -8,6 +8,8 @@ import { Warehouse } from '../warehouse/entities/warehouse.entity';
 import { Shop } from '../shops/entities/shops.entity';
 import { BaseMultiTenantService, MultiTenantUser } from '@/common/services/base-multi-tenant.service';
 import { UserRole } from '@/common/enums';
+import { User } from '../users/entities/user.entity';
+import { Employee } from '../users/entities/employee.entity';
 
 @Injectable()
 export class CompanyService extends BaseMultiTenantService {
@@ -18,11 +20,15 @@ export class CompanyService extends BaseMultiTenantService {
     private readonly warehouseRepository: Repository<Warehouse>,
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Employee)
+    private readonly employeeRepository: Repository<Employee>,
   ) {
     super();
   }
 
-  async create(createCompanyDto: CreateCompanyDto): Promise<CompanyResponseDto> {
+  async create(createCompanyDto: CreateCompanyDto, user?: User): Promise<CompanyResponseDto> {
 	const existingCompany = await this.companyRepository.findOne({ where: { name: createCompanyDto.name } });
 	if (existingCompany) {
 	  throw new ConflictException('Company with this name already exists');
@@ -47,6 +53,28 @@ export class CompanyService extends BaseMultiTenantService {
       }
     }
 
+    // Associate the creating user with the company if provided
+    if (user) {
+      // Update user's company association
+      user.companyId = savedCompany.id;
+      await this.userRepository.save(user);
+
+      // Create an Employee record for the user
+      const employeeData = {
+        name: `${user.firstName} ${user.lastName}`,
+        phoneNumber: user.phone || '',
+        baseCommissionRate: 0, // Default commission rate
+        jobTitle: 'Company Owner', // Default title for company creator
+        user: user,
+        company: savedCompany,
+        shop: null,
+        warehouse: null,
+      };
+
+      const employee = this.employeeRepository.create(employeeData);
+      await this.employeeRepository.save(employee);
+    }
+
     // Return company with warehouses
     const companyWithWarehouses = await this.companyRepository.findOne({ 
       where: { id: savedCompany.id }, 
@@ -65,13 +93,10 @@ export class CompanyService extends BaseMultiTenantService {
     
     // Apply company filtering based on user role
     if (user && user.role !== UserRole.SUPER_ADMIN) {
-      if (user.companyId) {
-        queryBuilder.andWhere('company.id = :userCompanyId', {
-          userCompanyId: user.companyId,
-        });
-      } else {
-        queryBuilder.andWhere('1 = 0'); // No results if no company
-      }
+      // Show companies where the user is an employee
+      queryBuilder.andWhere('employees.userId = :userId', {
+        userId: user.id,
+      });
     }
     
     if (search) {

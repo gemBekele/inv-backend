@@ -71,11 +71,16 @@ export class WarehouseService extends BaseMultiTenantService {
     const { page = 1, limit = 10, search } = query;
     const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
       .leftJoinAndSelect('warehouse.company', 'company')
-      .leftJoinAndSelect('warehouse.manager', 'manager');
+      .leftJoinAndSelect('warehouse.manager', 'manager')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user');
     
-    // Apply company filtering
-    if (user) {
-      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    // Apply warehouse filtering based on user role
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
+      // Show warehouses from companies where the user is an employee
+      queryBuilder.andWhere('employees.userId = :userId', {
+        userId: user.id,
+      });
     }
     
     if (search) {
@@ -100,11 +105,17 @@ export class WarehouseService extends BaseMultiTenantService {
     const { page = 1, limit = 10, search } = query;
     const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
       .leftJoinAndSelect('warehouse.products', 'products')
-      .leftJoinAndSelect('products.product', 'product');
+      .leftJoinAndSelect('products.product', 'product')
+      .leftJoinAndSelect('warehouse.company', 'company')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user');
     
-    // Apply company filtering
-    if (user) {
-      this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+    // Apply warehouse filtering based on user role
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
+      // Show warehouses from companies where the user is an employee
+      queryBuilder.andWhere('employees.userId = :userId', {
+        userId: user.id,
+      });
     }
     
     if (search) {
@@ -129,11 +140,17 @@ async findProductOfWarehouse(warehouseId: string, productId: string, user?: Mult
   const queryBuilder = this.warehouseRepository.createQueryBuilder('warehouse')
     .leftJoinAndSelect('warehouse.products', 'products')
     .leftJoinAndSelect('products.product', 'product')
+    .leftJoinAndSelect('warehouse.company', 'company')
+    .leftJoinAndSelect('company.employees', 'employees')
+    .leftJoinAndSelect('employees.user', 'user')
     .where('warehouse.id = :warehouseId', { warehouseId });
   
-  // Apply company filtering
-  if (user) {
-    this.applyCompanyFilter(queryBuilder, user, 'warehouse');
+  // Apply warehouse filtering based on user role
+  if (user && user.role !== UserRole.SUPER_ADMIN) {
+    // Show warehouses from companies where the user is an employee
+    queryBuilder.andWhere('employees.userId = :userId', {
+      userId: user.id,
+    });
   }
   
   const warehouse = await queryBuilder.getOne();
@@ -157,11 +174,17 @@ async findProductOfWarehouse(warehouseId: string, productId: string, user?: Mult
   async findOne(id: string, query?: WarehouseQueryDto, user?: MultiTenantUser): Promise<WarehouseDetailResponseDto> {
     // First, get the warehouse to ensure it exists and user has access
     const warehouseQuery = this.warehouseRepository.createQueryBuilder('warehouse')
+      .leftJoinAndSelect('warehouse.company', 'company')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user')
       .where('warehouse.id = :id', { id });
     
-    // Apply company filtering
-    if (user) {
-      this.applyCompanyFilter(warehouseQuery, user, 'warehouse');
+    // Apply warehouse filtering based on user role
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
+      // Show warehouses from companies where the user is an employee
+      warehouseQuery.andWhere('employees.userId = :userId', {
+        userId: user.id,
+      });
     }
     
     const warehouse = await warehouseQuery.getOne();
@@ -173,11 +196,17 @@ async findProductOfWarehouse(warehouseId: string, productId: string, user?: Mult
     const productsQuery = this.warehouseRepository.createQueryBuilder('warehouse')
       .leftJoinAndSelect('warehouse.products', 'products')
       .leftJoinAndSelect('products.product', 'product')
+      .leftJoinAndSelect('warehouse.company', 'company')
+      .leftJoinAndSelect('company.employees', 'employees')
+      .leftJoinAndSelect('employees.user', 'user')
       .where('warehouse.id = :id', { id });
     
-    // Apply company filtering again
-    if (user) {
-      this.applyCompanyFilter(productsQuery, user, 'warehouse');
+    // Apply warehouse filtering again
+    if (user && user.role !== UserRole.SUPER_ADMIN) {
+      // Show warehouses from companies where the user is an employee
+      productsQuery.andWhere('employees.userId = :userId', {
+        userId: user.id,
+      });
     }
     
     // Apply product search filter if search term is provided

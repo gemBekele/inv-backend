@@ -79,7 +79,7 @@ describe('CompanyService', () => {
       warehouseRepository.findBy.mockResolvedValue([mockWarehouse] as any);
       warehouseRepository.save.mockResolvedValue(mockWarehouse as any);
 
-      const result = await service.create(createCompanyDto);
+      const result = await service.create(createCompanyDto, undefined);
 
       expect(companyRepository.create).toHaveBeenCalledWith({
         name: createCompanyDto.name,
@@ -101,7 +101,7 @@ describe('CompanyService', () => {
 
       companyRepository.findOne.mockResolvedValue(mockCompany as any);
 
-      await expect(service.create(createCompanyDto)).rejects.toThrow(ConflictException);
+      await expect(service.create(createCompanyDto, undefined)).rejects.toThrow(ConflictException);
     });
   });
 

@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 async function seedData() {
   const client = new Client({
     host: 'localhost',
-    port: 5434,
+    port: 5432,
     user: 'postgres',
     password: 'postgres',
     database: 'gelagle-stock-ims'

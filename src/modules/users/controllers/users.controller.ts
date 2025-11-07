@@ -15,6 +15,7 @@ import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
 import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
 import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
 import { AssignUserDto } from '@/modules/users/dto/user/assign-user.dto';
+import { ChangePasswordDto } from '@/modules/users/dto/user/change-password.dto';
 import { JwtAuthGuard, RolesGuard } from '@/common/guards';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@/common/decorators';
@@ -42,6 +43,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   updateMe(@Body() dto: UpdateUserDto, @CurrentUser() user: User) {
     return this.usersService.update(user.id, dto, user);
+  }
+
+  @Patch('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Change user password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 401, description: 'Current password is incorrect' })
+  async changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: User) {
+    return this.usersService.changePassword(user.id, dto);
   }
 
   @Delete('me')

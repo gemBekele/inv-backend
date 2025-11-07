@@ -20,10 +20,41 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Check if PM2 is installed
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}❌ Error: Node.js is not installed!${NC}"
+    echo "Please install Node.js first:"
+    echo "  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
+    echo "  sudo apt install -y nodejs"
+    exit 1
+fi
+
+# Check if npm is installed
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}❌ Error: npm is not installed!${NC}"
+    exit 1
+fi
+
+# Check if Yarn is installed, install if not
+if ! command -v yarn &> /dev/null; then
+    echo -e "${YELLOW}⚠️  Yarn not found. Installing Yarn globally...${NC}"
+    npm install -g yarn
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install Yarn!${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ Yarn installed successfully${NC}"
+fi
+
+# Check if PM2 is installed, install if not
 if ! command -v pm2 &> /dev/null; then
     echo -e "${YELLOW}⚠️  PM2 not found. Installing PM2 globally...${NC}"
     npm install -g pm2
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Failed to install PM2!${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ PM2 installed successfully${NC}"
 fi
 
 # Install dependencies

@@ -357,3 +357,11 @@ tar -czf app_backup_$(date +%Y%m%d).tar.gz /path/to/your/app
 
 That's it! Your application should now be running on your VPS with PM2.
 
+
+
+
+
+
+
+
+

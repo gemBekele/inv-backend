@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, MinLength, MaxLength, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import { IsEmail, IsNotEmpty, MinLength, MaxLength, IsOptional, IsEnum, IsUUID, ValidateIf } from 'class-validator';
 import { UserRole } from '@/common/enums';
 
 export class CreateUserDto {
@@ -17,10 +17,10 @@ export class CreateUserDto {
   @MaxLength(100)
   lastName: string;
 
-  @ApiProperty({ example: 'StrongPassword123!' })
-  @IsNotEmpty()
-  @MinLength(8)
-  password: string;
+  @ApiPropertyOptional({ example: 'StrongPassword123!', description: 'Password (optional for employee creation - will generate temporary password if not provided)' })
+  @ValidateIf((o) => o.password !== undefined && o.password !== null && o.password !== '')
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  password?: string;
 
   @ApiPropertyOptional({ example: '+251911234567' })
   @IsOptional()

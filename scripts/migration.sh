@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # TypeORM Migration Helper Script
 # Usage: 

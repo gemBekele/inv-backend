@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { CreateUserDto } from '@/modules/users/dto/user/create-user.dto';
 import { UpdateUserDto } from '@/modules/users/dto/user/update-user.dto';
 import { AdminUpdateUserDto } from '@/modules/users/dto/user/admin-user-update.dto';
 import { AssignUserDto } from '@/modules/users/dto/user/assign-user.dto';
+import { ChangePasswordDto } from '@/modules/users/dto/user/change-password.dto';
 import { User } from '../../users/entities/user.entity';
 import { Employee } from '../../users/entities/employee.entity';
 import { Company } from '@/modules/company/entities/company.entity';
@@ -151,13 +153,24 @@ export class UsersService {
     throw new ForbiddenException('User Exists!');
   }
 
+  // Generate temporary password if not provided (for employee creation)
+  let password = dto.password;
+  if (!password && companyToAssociate) {
+    // Generate a secure temporary password
+    const tempPassword = `Temp${Math.random().toString(36).slice(-8)}${Math.floor(Math.random() * 10)}`;
+    password = tempPassword;
+  } else if (!password) {
+    throw new ForbiddenException('Password is required when creating users without company assignment');
+  }
+
   const userData: Partial<User> = {
     email: dto.email,
     firstName: dto.firstName,
     lastName: dto.lastName,
-    password: dto.password,
+    password: password,
     phone: dto.phone,
     role: dto.role || UserRole.USER, // Default to USER role if not specified
+    status: UserStatus.ACTIVE, // Set status to ACTIVE by default
   };
 
   // Assign company if we have one to associate
@@ -180,6 +193,8 @@ export class UsersService {
   }
 
   const user = this.usersRepository.create(userData);
+  // Explicitly set status to ACTIVE to ensure it's not overridden by entity default
+  user.status = UserStatus.ACTIVE;
   const savedUser = await this.usersRepository.save(user);
 
   // Auto-create Employee record if user is assigned to a company
@@ -245,6 +260,25 @@ export class UsersService {
     user.status = user.status === UserStatus.ACTIVE ? UserStatus.INACTIVE : UserStatus.ACTIVE;
     
     return this.usersRepository.save(user);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ message: string }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify old password
+    const isPasswordValid = await bcrypt.compare(dto.oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Update password (will be hashed by BeforeUpdate hook)
+    user.password = dto.newPassword;
+    await this.usersRepository.save(user);
+
+    return { message: 'Password changed successfully' };
   }
 
   /**
